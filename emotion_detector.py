@@ -1,0 +1,281 @@
+"""
+Emotion Detection Module for Kindergarten Recording Analyzer
+מודול זיהוי רגשות למערכת ניתוח הקלטות גן ילדים
+"""
+
+import numpy as np
+import librosa
+from typing import Dict, List, Tuple
+import warnings
+warnings.filterwarnings('ignore')
+
+class EmotionDetector:
+    def __init__(self):
+        """
+        Initialize Emotion Detector
+        אתחול מזהה הרגשות
+        """
+        # Emotion thresholds based on audio features
+        # ספי רגשות בהתבסס על תכונות אודיו
+        self.emotion_thresholds = {
+            'anger': {
+                'energy_threshold': 0.15,
+                'pitch_variance_threshold': 0.3,
+                'spectral_rolloff_threshold': 0.6
+            },
+            'stress': {
+                'energy_variance_threshold': 0.1,
+                'zero_crossing_rate_threshold': 0.05,
+                'spectral_centroid_variance_threshold': 0.2
+            },
+            'calm': {
+                'energy_threshold': 0.05,
+                'pitch_stability_threshold': 0.8,
+                'spectral_rolloff_threshold': 0.4
+            },
+            'aggression': {
+                'energy_threshold': 0.2,
+                'pitch_variance_threshold': 0.4,
+                'spectral_bandwidth_threshold': 0.7
+            }
+        }
+    
+    def calculate_emotion_features(self, audio: np.ndarray, sr: int) -> Dict:
+        """
+        Calculate emotion-related audio features
+        חישוב תכונות אודיו הקשורות לרגשות
+        
+        Args:
+            audio: Audio data
+            sr: Sample rate
+            
+        Returns:
+            Dictionary of emotion features
+        """
+        features = {}
+        
+        # Energy features
+        rms_energy = librosa.feature.rms(y=audio)[0]
+        features['mean_energy'] = np.mean(rms_energy)
+        features['energy_variance'] = np.var(rms_energy)
+        features['energy_max'] = np.max(rms_energy)
+        
+        # Pitch features (using chroma as proxy for pitch)
+        chroma = librosa.feature.chroma_stft(y=audio, sr=sr)
+        pitch_variance = np.var(chroma, axis=1)
+        features['mean_pitch_variance'] = np.mean(pitch_variance)
+        features['pitch_stability'] = 1.0 / (1.0 + np.mean(pitch_variance))
+        
+        # Spectral features
+        spectral_centroid = librosa.feature.spectral_centroid(y=audio, sr=sr)[0]
+        features['mean_spectral_centroid'] = np.mean(spectral_centroid)
+        features['spectral_centroid_variance'] = np.var(spectral_centroid)
+        
+        spectral_rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sr)[0]
+        features['mean_spectral_rolloff'] = np.mean(spectral_rolloff)
+        
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=audio, sr=sr)[0]
+        features['mean_spectral_bandwidth'] = np.mean(spectral_bandwidth)
+        
+        # Zero crossing rate (indicates speech vs noise)
+        zcr = librosa.feature.zero_crossing_rate(audio)[0]
+        features['mean_zero_crossing_rate'] = np.mean(zcr)
+        features['zero_crossing_rate_variance'] = np.var(zcr)
+        
+        # MFCC features for speech characteristics
+        mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=13)
+        features['mfcc_mean'] = np.mean(mfccs, axis=1)
+        features['mfcc_variance'] = np.var(mfccs, axis=1)
+        
+        return features
+    
+    def detect_emotion(self, features: Dict) -> Dict:
+        """
+        Detect emotion based on audio features
+        זיהוי רגש בהתבסס על תכונות אודיו
+        
+        Args:
+            features: Dictionary of audio features
+            
+        Returns:
+            Dictionary with emotion scores and detected emotion
+        """
+        emotion_scores = {}
+        
+        # Calculate scores for each emotion
+        for emotion, thresholds in self.emotion_thresholds.items():
+            score = 0.0
+            weight_sum = 0.0
+            
+            if emotion == 'anger':
+                # High energy + high pitch variance + high spectral rolloff = anger
+                if features['mean_energy'] > thresholds['energy_threshold']:
+                    score += 0.4
+                weight_sum += 0.4
+                
+                if features['mean_pitch_variance'] > thresholds['pitch_variance_threshold']:
+                    score += 0.3
+                weight_sum += 0.3
+                
+                if features['mean_spectral_rolloff'] > thresholds['spectral_rolloff_threshold']:
+                    score += 0.3
+                weight_sum += 0.3
+            
+            elif emotion == 'stress':
+                # High energy variance + high ZCR + high spectral centroid variance = stress
+                if features['energy_variance'] > thresholds['energy_variance_threshold']:
+                    score += 0.4
+                weight_sum += 0.4
+                
+                if features['mean_zero_crossing_rate'] > thresholds['zero_crossing_rate_threshold']:
+                    score += 0.3
+                weight_sum += 0.3
+                
+                if features['spectral_centroid_variance'] > thresholds['spectral_centroid_variance_threshold']:
+                    score += 0.3
+                weight_sum += 0.3
+            
+            elif emotion == 'calm':
+                # Low energy + high pitch stability + low spectral rolloff = calm
+                if features['mean_energy'] < thresholds['energy_threshold']:
+                    score += 0.4
+                weight_sum += 0.4
+                
+                if features['pitch_stability'] > thresholds['pitch_stability_threshold']:
+                    score += 0.3
+                weight_sum += 0.3
+                
+                if features['mean_spectral_rolloff'] < thresholds['spectral_rolloff_threshold']:
+                    score += 0.3
+                weight_sum += 0.3
+            
+            elif emotion == 'aggression':
+                # Very high energy + very high pitch variance + high spectral bandwidth = aggression
+                if features['mean_energy'] > thresholds['energy_threshold']:
+                    score += 0.4
+                weight_sum += 0.4
+                
+                if features['mean_pitch_variance'] > thresholds['pitch_variance_threshold']:
+                    score += 0.3
+                weight_sum += 0.3
+                
+                if features['mean_spectral_bandwidth'] > thresholds['spectral_bandwidth_threshold']:
+                    score += 0.3
+                weight_sum += 0.3
+            
+            # Normalize score
+            if weight_sum > 0:
+                emotion_scores[emotion] = score / weight_sum
+            else:
+                emotion_scores[emotion] = 0.0
+        
+        # Determine primary emotion
+        primary_emotion = max(emotion_scores, key=emotion_scores.get)
+        confidence = emotion_scores[primary_emotion]
+        
+        return {
+            'emotion_scores': emotion_scores,
+            'primary_emotion': primary_emotion,
+            'confidence': confidence
+        }
+    
+    def analyze_segment_emotions(self, audio_segments: List[np.ndarray], sr: int) -> List[Dict]:
+        """
+        Analyze emotions for multiple audio segments
+        ניתוח רגשות עבור מספר קטעי אודיו
+        
+        Args:
+            audio_segments: List of audio segments
+            sr: Sample rate
+            
+        Returns:
+            List of emotion analysis results for each segment
+        """
+        segment_emotions = []
+        
+        for i, segment in enumerate(audio_segments):
+            if len(segment) < sr * 0.5:  # Skip segments shorter than 0.5 seconds
+                continue
+                
+            features = self.calculate_emotion_features(segment, sr)
+            emotion_result = self.detect_emotion(features)
+            
+            segment_emotions.append({
+                'segment_index': i,
+                'start_time': i * 5.0,  # Assuming 5-second segments
+                'end_time': (i + 1) * 5.0,
+                'features': features,
+                'emotion_analysis': emotion_result
+            })
+        
+        return segment_emotions
+    
+    def detect_concerning_emotions(self, segment_emotions: List[Dict], threshold: float = 0.6) -> List[Dict]:
+        """
+        Detect segments with concerning emotions (anger, stress, aggression)
+        זיהוי קטעים עם רגשות מדאיגים (כעס, לחץ, אגרסיה)
+        
+        Args:
+            segment_emotions: List of emotion analysis results
+            threshold: Confidence threshold for concerning emotions
+            
+        Returns:
+            List of concerning segments with details
+        """
+        concerning_segments = []
+        concerning_emotions = ['anger', 'stress', 'aggression']
+        
+        for segment in segment_emotions:
+            emotion_analysis = segment['emotion_analysis']
+            primary_emotion = emotion_analysis['primary_emotion']
+            confidence = emotion_analysis['confidence']
+            
+            if primary_emotion in concerning_emotions and confidence > threshold:
+                concerning_segments.append({
+                    'segment_index': segment['segment_index'],
+                    'start_time': segment['start_time'],
+                    'end_time': segment['end_time'],
+                    'detected_emotion': primary_emotion,
+                    'confidence': confidence,
+                    'all_scores': emotion_analysis['emotion_scores'],
+                    'severity': self._calculate_severity(primary_emotion, confidence)
+                })
+        
+        return concerning_segments
+    
+    def _calculate_severity(self, emotion: str, confidence: float) -> str:
+        """
+        Calculate severity level for detected emotion
+        חישוב רמת חומרה עבור רגש שזוהה
+        
+        Args:
+            emotion: Detected emotion
+            confidence: Confidence score
+            
+        Returns:
+            Severity level (low, medium, high, critical)
+        """
+        base_severity = {
+            'anger': 'medium',
+            'stress': 'low',
+            'aggression': 'high'
+        }
+        
+        severity_map = {
+            'low': ['low', 'medium'],
+            'medium': ['medium', 'high'],
+            'high': ['high', 'critical']
+        }
+        
+        base = base_severity.get(emotion, 'low')
+        
+        if confidence > 0.8:
+            return severity_map[base][1]  # Higher severity
+        else:
+            return severity_map[base][0]  # Lower severity
+
+if __name__ == "__main__":
+    # Test the emotion detector
+    detector = EmotionDetector()
+    print("Emotion Detector initialized successfully")
+    print("Ready to detect emotions in kindergarten recordings...")
