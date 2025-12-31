@@ -3,6 +3,13 @@ librosa>=0.10.0
 soundfile>=0.12.0
 pyaudio>=0.2.11
 
+# IMPORTANT: FFmpeg is required for Whisper transcription
+# Install FFmpeg before using Whisper features:
+#   Windows: choco install ffmpeg (or download from https://ffmpeg.org/download.html)
+#   Linux: sudo apt-get install ffmpeg
+#   macOS: brew install ffmpeg
+# See INSTALL_FFMPEG.md for detailed instructions
+
 # Machine Learning & AI (using compatible versions)
 tensorflow>=2.16.0
 torch>=2.1.0
@@ -31,3 +38,9 @@ Pillow>=10.0.0
 
 # Optional Hebrew language support (if available)
 # hebpipe>=1.0.0
+
+# Advanced Models (Optional but Recommended)
+# openai-whisper>=20231117  # For transcription (REQUIRES FFmpeg - see INSTALL_FFMPEG.md)
+# transformers>=4.30.0  # For emotion detection
+# pyannote.audio>=3.1.0  # For speaker diarization
+# torch>=2.0.0  # Required for transformers

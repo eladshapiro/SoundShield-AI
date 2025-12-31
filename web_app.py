@@ -1,6 +1,5 @@
 """
 Web Application for Kindergarten Recording Analyzer
-אפליקציית ווב למערכת ניתוח הקלטות גן ילדים
 """
 
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
@@ -30,6 +29,202 @@ app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 # Initialize analyzer
 analyzer = None
 
+# Progress tracking - use dictionary to support multiple concurrent analyses
+# Key: filename, Value: progress dict
+progress_tracking = {}
+# Default progress for backward compatibility
+current_progress = {
+    'status': 'idle',
+    'message': '',
+    'step': 0,
+    'total_steps': 7
+}
+
+def safe_print(msg):
+    """Print to both stdout and stderr to ensure visibility"""
+    print(msg, flush=True)
+    import sys
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
+
+def update_progress(status, message, step=None, filename=None):
+    """Update progress status for a specific analysis
+    
+    Args:
+        status: Progress status
+        message: Progress message
+        step: Current step number
+        filename: Optional filename to track progress per analysis
+    """
+    global current_progress, progress_tracking
+    
+    if filename:
+        # Use per-analysis progress tracking
+        if filename not in progress_tracking:
+            progress_tracking[filename] = {
+                'status': 'analyzing',
+                'message': '',
+                'step': 0,
+                'total_steps': 7
+            }
+        
+        progress_tracking[filename]['status'] = status
+        progress_tracking[filename]['message'] = message
+        if step is not None:
+            progress_tracking[filename]['step'] = step
+        
+        # Also update global for backward compatibility (latest analysis)
+        current_progress['status'] = status
+        current_progress['message'] = message
+        if step is not None:
+            current_progress['step'] = step
+    else:
+        # Update global progress only
+        current_progress['status'] = status
+        current_progress['message'] = message
+        if step is not None:
+            current_progress['step'] = step
+    
+    # Print to both stdout and stderr to ensure visibility
+    msg = f"Progress: {status} - {message}"
+    safe_print(msg)
+
+def run_analysis_with_progress(analyzer, file_path, language, progress_callback):
+    """Run analysis with progress updates"""
+    import threading
+    
+    # Translations for progress messages
+    translations = {
+        'he': {
+            'step1': 'שלב 1: ניתוח אודיו בסיסי',
+            'step2': 'שלב 2: זיהוי רגשות',
+            'step3': 'שלב 3: זיהוי בכי',
+            'step4': 'שלב 4: זיהוי אלימות',
+            'step5': 'שלב 5: זיהוי הזנחה',
+            'step6': 'שלב 6: ניתוח מתקדם עם מודלי ML',
+            'step7': 'שלב 7: זיהוי שפה לא הולמת',
+            'generating_report': 'יוצר דוח...'
+        },
+        'en': {
+            'step1': 'Step 1: Basic audio analysis',
+            'step2': 'Step 2: Emotion detection',
+            'step3': 'Step 3: Baby cry detection',
+            'step4': 'Step 4: Violence detection',
+            'step5': 'Step 5: Neglect detection',
+            'step6': 'Step 6: Advanced analysis with ML models',
+            'step7': 'Step 7: Inappropriate language detection',
+            'generating_report': 'Generating report...'
+        }
+    }
+    
+    lang_dict = translations.get(language, translations['en'])
+    
+    # Step 1: Basic audio analysis
+    progress_callback(1, lang_dict['step1'])
+    safe_print(f"🔄 {lang_dict['step1']}")
+    audio_analysis = analyzer.audio_analyzer.analyze_audio_file(file_path)
+    safe_print(f"✅ {lang_dict['step1']} completed")
+    
+    # Step 2: Emotion detection
+    progress_callback(2, lang_dict['step2'])
+    safe_print(f"🔄 {lang_dict['step2']}")
+    emotion_results = analyzer.emotion_detector.analyze_segment_emotions(
+        audio_analysis['segments'], 
+        audio_analysis['sample_rate']
+    )
+    concerning_emotions = analyzer.emotion_detector.detect_concerning_emotions(emotion_results)
+    safe_print(f"✅ {lang_dict['step2']} completed")
+    
+    # Step 3: Cry detection
+    progress_callback(3, lang_dict['step3'])
+    safe_print(f"🔄 {lang_dict['step3']}")
+    audio, sr = analyzer.audio_analyzer.load_audio(file_path)
+    cry_segments = analyzer.cry_detector.detect_cry_segments(audio, sr)
+    cry_with_responses = analyzer.cry_detector.detect_response_to_cry(audio, sr, cry_segments)
+    safe_print(f"✅ {lang_dict['step3']} completed")
+    
+    # Step 4: Violence detection
+    progress_callback(4, lang_dict['step4'])
+    safe_print(f"🔄 {lang_dict['step4']}")
+    violence_segments = analyzer.violence_detector.detect_violence_segments(audio, sr)
+    safe_print(f"✅ {lang_dict['step4']} completed")
+    
+    # Step 5: Neglect detection
+    progress_callback(5, lang_dict['step5'])
+    safe_print(f"🔄 {lang_dict['step5']}")
+    neglect_analysis = analyzer.neglect_detector.detect_neglect_patterns(
+        audio, sr, cry_segments, violence_segments
+    )
+    safe_print(f"✅ {lang_dict['step5']} completed")
+    
+    # Step 6: Advanced analysis
+    advanced_analysis = {}
+    if analyzer.advanced_analyzer and analyzer.advanced_analyzer.models_loaded:
+        progress_callback(6, lang_dict['step6'])
+        safe_print(f"🔄 {lang_dict['step6']}")
+        try:
+            advanced_analysis = analyzer.advanced_analyzer.comprehensive_analysis(file_path, language=language)
+            safe_print(f"✅ {lang_dict['step6']} completed")
+        except Exception as e:
+            safe_print(f"⚠️ Error in advanced analysis: {e}")
+    else:
+        # Skip step 6 if not available
+        safe_print(f"⏭️ Skipping {lang_dict['step6']} (not available)")
+    
+    # Step 7: Inappropriate language detection
+    inappropriate_language = {}
+    if analyzer.language_detector:
+        progress_callback(7, lang_dict['step7'])
+        safe_print(f"🔄 {lang_dict['step7']}")
+        try:
+            inappropriate_language = analyzer.language_detector.analyze_with_whisper(file_path, language=language)
+            
+            # Check if there was an error
+            if inappropriate_language.get('status') == 'error':
+                safe_print(f"⚠️ Error in language detection: {inappropriate_language.get('error', 'Unknown error')}")
+            elif inappropriate_language.get('status') == 'whisper_not_installed':
+                safe_print(f"⚠️ Whisper not installed: {inappropriate_language.get('error', 'Unknown error')}")
+            elif inappropriate_language.get('detected_inappropriate_words', 0) > 0:
+                safe_print(f"⚠️ Detected {inappropriate_language['detected_inappropriate_words']} inappropriate words")
+            else:
+                safe_print("✅ No inappropriate language detected")
+            
+            safe_print(f"✅ {lang_dict['step7']} completed")
+        except Exception as e:
+            safe_print(f"⚠️ Error in language detection: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        # Skip step 7 if not available
+        safe_print(f"⏭️ Skipping {lang_dict['step7']} (not available)")
+    
+    # Generate report
+    progress_callback(7, lang_dict['generating_report'])
+    safe_print(f"🔄 {lang_dict['generating_report']}")
+    
+    # Compile results
+    analysis_results = {
+        'file_path': file_path,
+        'duration': audio_analysis['duration'],
+        'audio_analysis': audio_analysis,
+        'emotion_results': emotion_results,
+        'concerning_emotions': concerning_emotions,
+        'cry_segments': cry_segments,
+        'cry_with_responses': cry_with_responses,
+        'violence_segments': violence_segments,
+        'neglect_analysis': neglect_analysis,
+        'advanced_analysis': advanced_analysis,
+        'inappropriate_language': inappropriate_language,
+        'analysis_timestamp': time.time(),
+        'language': language
+    }
+    
+    # Generate report
+    report = analyzer.generate_report(analysis_results)
+    analysis_results['report'] = report
+    
+    return analysis_results
+
 def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -44,12 +239,13 @@ def upload_file():
     """Handle file upload and analysis"""
     try:
         if 'file' not in request.files:
-            return jsonify({'error': 'לא נבחר קובץ'}), 400
+            return jsonify({'error': 'No file selected'}), 400
         
         file = request.files['file']
+        language = request.form.get('language', 'en')  # Get language from form
         
         if file.filename == '':
-            return jsonify({'error': 'לא נבחר קובץ'}), 400
+            return jsonify({'error': 'No file selected'}), 400
         
         if file and allowed_file(file.filename):
             # Secure filename and save
@@ -62,29 +258,82 @@ def upload_file():
             # Initialize analyzer if not already done
             global analyzer
             if analyzer is None:
-                analyzer = KindergartenRecordingAnalyzer()
+                update_progress('initializing', 'מאתחל את המערכת... / Initializing system...', 0, filename=filename)
+                analyzer = KindergartenRecordingAnalyzer(language=language)
+            else:
+                # Update language if analyzer already exists
+                analyzer.language = language
             
-            # Run analysis
-            print(f"Starting analysis of {filename}...")
-            results = analyzer.run_complete_analysis(filepath)
+            # Initialize progress tracking for this specific analysis
+            # Use filename as unique identifier to avoid race conditions
+            global progress_tracking
+            progress_tracking[filename] = {
+                'status': 'analyzing',
+                'message': 'מתחיל ניתוח... / Starting analysis...',
+                'step': 0,
+                'total_steps': 7
+            }
             
-            # Return results
+            # Also update global for backward compatibility
+            current_progress['status'] = 'analyzing'
+            current_progress['message'] = 'מתחיל ניתוח... / Starting analysis...'
+            current_progress['step'] = 0
+            current_progress['total_steps'] = 7
+            
+            # Create progress callback that updates immediately with filename
+            def progress_callback(step, message):
+                update_progress('analyzing', message, step, filename=filename)
+                # Force flush to ensure update is visible
+                import sys
+                sys.stdout.flush()
+            
+            # Run analysis with progress updates
+            start_msg = f"Starting analysis of {filename} with language {language}..."
+            safe_print(start_msg)
+            results = run_analysis_with_progress(analyzer, filepath, language, progress_callback)
+            
+            # Mark as completed
+            update_progress('completed', 'ניתוח הושלם בהצלחה! / Analysis completed successfully!', 7, filename=filename)
+            
+            # Clean up progress tracking after a delay (keep for 5 minutes for UI polling)
+            # Note: In production, consider using a background task to clean up old entries
+            import threading
+            def cleanup_progress():
+                import time
+                time.sleep(300)  # 5 minutes
+                if filename in progress_tracking:
+                    del progress_tracking[filename]
+            threading.Thread(target=cleanup_progress, daemon=True).start()
+            
+            # Return results including inappropriate language
+            inappropriate_lang = results.get('inappropriate_language', {})
+            inappropriate_words_list = []
+            if inappropriate_lang.get('words_by_severity'):
+                for severity, words in inappropriate_lang['words_by_severity'].items():
+                    inappropriate_words_list.extend(words)
+            
             return jsonify({
                 'success': True,
-                'message': 'ניתוח הושלם בהצלחה',
+                'message': 'Analysis completed successfully',
                 'filename': filename,
                 'results': {
                     'summary': results['report']['summary'],
-                    'statistics': results['report']['statistics']
-                }
+                    'statistics': results['report']['statistics'],
+                    'detailed_findings': results['report'].get('detailed_findings', {})
+                },
+                'inappropriate_language': {
+                    'detected_inappropriate_words': inappropriate_lang.get('detected_inappropriate_words', 0),
+                    'words_by_severity': inappropriate_lang.get('words_by_severity', {}),
+                    'inappropriate_words': inappropriate_words_list
+                } if inappropriate_lang else None
             })
         
         else:
-            return jsonify({'error': 'סוג קובץ לא נתמך'}), 400
+            return jsonify({'error': 'File type not supported'}), 400
     
     except Exception as e:
         print(f"Error in upload_file: {str(e)}")
-        return jsonify({'error': f'שגיאה בניתוח: {str(e)}'}), 500
+        return jsonify({'error': f'Analysis error: {str(e)}'}), 500
 
 @app.route('/analyze/<filename>')
 def analyze_file(filename):
@@ -188,6 +437,23 @@ def serve_audio_clip(filename):
             return jsonify({'error': 'Audio clip not found'}), 404
     except Exception as e:
         return jsonify({'error': f'Error serving audio clip: {str(e)}'}), 500
+
+@app.route('/progress')
+def get_progress():
+    """Get current analysis progress
+    
+    Supports both:
+    - /progress - returns latest/global progress
+    - /progress?filename=<filename> - returns progress for specific analysis
+    """
+    filename = request.args.get('filename')
+    
+    if filename and filename in progress_tracking:
+        # Return progress for specific analysis
+        return jsonify(progress_tracking[filename])
+    else:
+        # Return global/latest progress for backward compatibility
+        return jsonify(current_progress)
 
 @app.route('/health')
 def health_check():
@@ -431,9 +697,113 @@ def create_html_template():
             margin: 0 auto 20px;
         }
         
+        .progress-message {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            text-align: center;
+            font-size: 1.1em;
+            color: #667eea;
+            font-weight: bold;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .progress-steps {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .step-indicator.active {
+            background-color: #e8f4f8;
+            border-left: 4px solid #667eea;
+        }
+        
+        .step-indicator.completed {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            background-color: #ddd;
+            color: #666;
+        }
+        
+        .step-indicator.active .step-number {
+            background-color: #667eea;
+            color: white;
+        }
+        
+        .step-indicator.completed .step-number {
+            background-color: #28a745;
+            color: white;
+        }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        
+        .language-selector {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .language-selector label {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #667eea;
+        }
+        
+        .language-selector select {
+            padding: 10px 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .language-selector select:hover {
+            border-color: #667eea;
+        }
+        
+        .language-selector select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
         @media (max-width: 768px) {
@@ -441,6 +811,7 @@ def create_html_template():
             .header h1 { font-size: 2em; }
             .results-grid { grid-template-columns: 1fr; }
             .report-item { flex-direction: column; gap: 10px; }
+            .language-selector { flex-direction: column; align-items: flex-start; }
         }
     </style>
 </head>
@@ -449,6 +820,14 @@ def create_html_template():
         <div class="header">
             <h1>מערכת ניתוח הקלטות גן ילדים</h1>
             <p>Kindergarten Recording Analyzer</p>
+        </div>
+        
+        <div class="language-selector">
+            <label for="languageSelect">🌐 שפת הניתוח / Analysis Language:</label>
+            <select id="languageSelect">
+                <option value="he">עברית (Hebrew)</option>
+                <option value="en">English (אנגלית)</option>
+            </select>
         </div>
         
         <div class="upload-section">
@@ -469,7 +848,39 @@ def create_html_template():
         
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>מעבד את הקובץ... זה יכול לקחת מספר דקות</p>
+            <div class="progress-message" id="progressMessage">
+                מתחיל ניתוח... / Starting analysis...
+            </div>
+            <div class="progress-steps" id="progressSteps" style="display: none;">
+                <div class="step-indicator" id="step1">
+                    <div class="step-number">1</div>
+                    <span>ניתוח אודיו בסיסי / Basic audio analysis</span>
+                </div>
+                <div class="step-indicator" id="step2">
+                    <div class="step-number">2</div>
+                    <span>זיהוי רגשות / Emotion detection</span>
+                </div>
+                <div class="step-indicator" id="step3">
+                    <div class="step-number">3</div>
+                    <span>זיהוי בכי / Baby cry detection</span>
+                </div>
+                <div class="step-indicator" id="step4">
+                    <div class="step-number">4</div>
+                    <span>זיהוי אלימות / Violence detection</span>
+                </div>
+                <div class="step-indicator" id="step5">
+                    <div class="step-number">5</div>
+                    <span>זיהוי הזנחה / Neglect detection</span>
+                </div>
+                <div class="step-indicator" id="step6">
+                    <div class="step-number">6</div>
+                    <span>ניתוח מתקדם / Advanced analysis</span>
+                </div>
+                <div class="step-indicator" id="step7">
+                    <div class="step-number">7</div>
+                    <span>זיהוי שפה לא הולמת / Inappropriate language detection</span>
+                </div>
+            </div>
         </div>
         
         <div class="results-section" id="resultsSection">
@@ -523,22 +934,96 @@ def create_html_template():
             }
         });
         
+        let progressCheckInterval = null;
+        
+        function updateProgressDisplay() {
+            fetch('/progress')
+                .then(response => response.json())
+                .then(data => {
+                    const progressMessage = document.getElementById('progressMessage');
+                    const progressSteps = document.getElementById('progressSteps');
+                    
+                    // Always show progress if we're checking
+                    if (data.status === 'analyzing' || data.status === 'initializing' || data.status === 'completed') {
+                        if (progressMessage) {
+                            progressMessage.textContent = data.message || 'מעבד... / Processing...';
+                        }
+                        if (progressSteps) {
+                            progressSteps.style.display = 'block';
+                        }
+                        
+                        // Update step indicators
+                        const currentStep = data.step || 0;
+                        for (let i = 1; i <= 7; i++) {
+                            const stepElement = document.getElementById('step' + i);
+                            if (stepElement) {
+                                if (i < currentStep) {
+                                    stepElement.className = 'step-indicator completed';
+                                } else if (i === currentStep && currentStep > 0) {
+                                    stepElement.className = 'step-indicator active';
+                                } else {
+                                    stepElement.className = 'step-indicator';
+                                }
+                            }
+                        }
+                        
+                        // Update progress bar
+                        const progressPercent = Math.min((currentStep / data.total_steps) * 100, 100);
+                        if (progressFill) {
+                            progressFill.style.width = progressPercent + '%';
+                        }
+                        
+                        // If completed, stop checking after a delay
+                        if (data.status === 'completed') {
+                            setTimeout(() => {
+                                if (progressCheckInterval) {
+                                    clearInterval(progressCheckInterval);
+                                    progressCheckInterval = null;
+                                }
+                            }, 2000);
+                        }
+                    } else if (data.status === 'idle') {
+                        // Only stop if we're not in the middle of an upload
+                        // Don't stop immediately, wait a bit
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching progress:', error);
+                });
+        }
+        
         function handleFile(file) {
             const formData = new FormData();
             formData.append('file', file);
+            
+            // Get selected language
+            const languageSelect = document.getElementById('languageSelect');
+            const selectedLanguage = languageSelect.value;
+            formData.append('language', selectedLanguage);
             
             // Show loading
             loading.style.display = 'block';
             progressBar.style.display = 'block';
             resultsSection.style.display = 'none';
             
-            // Simulate progress
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                progress += Math.random() * 10;
-                if (progress > 90) progress = 90;
-                progressFill.style.width = progress + '%';
-            }, 500);
+            // Show progress steps immediately
+            const progressSteps = document.getElementById('progressSteps');
+            progressSteps.style.display = 'block';
+            const progressMessage = document.getElementById('progressMessage');
+            progressMessage.textContent = 'מתחיל ניתוח... / Starting analysis...';
+            
+            // Reset progress steps
+            for (let i = 1; i <= 7; i++) {
+                const stepElement = document.getElementById('step' + i);
+                stepElement.className = 'step-indicator';
+            }
+            
+            // Start checking progress every 300ms (more frequent)
+            if (progressCheckInterval) {
+                clearInterval(progressCheckInterval);
+            }
+            progressCheckInterval = setInterval(updateProgressDisplay, 300);
+            updateProgressDisplay(); // Call immediately
             
             fetch('/upload', {
                 method: 'POST',
@@ -546,7 +1031,10 @@ def create_html_template():
             })
             .then(response => response.json())
             .then(data => {
-                clearInterval(progressInterval);
+                if (progressCheckInterval) {
+                    clearInterval(progressCheckInterval);
+                    progressCheckInterval = null;
+                }
                 progressFill.style.width = '100%';
                 
                 setTimeout(() => {
@@ -563,7 +1051,10 @@ def create_html_template():
                 }, 1000);
             })
             .catch(error => {
-                clearInterval(progressInterval);
+                if (progressCheckInterval) {
+                    clearInterval(progressCheckInterval);
+                    progressCheckInterval = null;
+                }
                 loading.style.display = 'none';
                 progressBar.style.display = 'none';
                 showAlert('שגיאה בהעלאת הקובץ: ' + error.message, 'error');
@@ -674,10 +1165,22 @@ def create_html_template():
                             <meta charset="UTF-8">
                             <title>דוח ניתוח - ${data.report.metadata.file_name}</title>
                             <style>
-                                body { font-family: Arial, sans-serif; margin: 20px; }
+                                body { font-family: Arial, sans-serif; margin: 20px; background: #f5f7fa; }
                                 h1 { color: #667eea; }
                                 .summary { background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; }
                                 .finding { background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #667eea; }
+                                .audio-player { 
+                                    background: #e8f4f8; 
+                                    padding: 15px; 
+                                    border-radius: 8px; 
+                                    margin: 10px 0; 
+                                    border: 1px solid #dee2e6;
+                                }
+                                .audio-player audio { 
+                                    width: 100%; 
+                                    margin: 10px 0; 
+                                    border-radius: 5px;
+                                }
                             </style>
                         </head>
                         <body>
@@ -691,7 +1194,7 @@ def create_html_template():
                             </div>
                             
                             <h2>ממצאים מפורטים</h2>
-                            ${generateDetailedFindingsHTML(data.report.detailed_findings)}
+                            ${generateDetailedFindingsHTML(data.report.detailed_findings, data.report.audio_clips || [])}
                             
                             <h2>המלצות</h2>
                             <ul>
@@ -707,14 +1210,38 @@ def create_html_template():
             });
         }
         
-        function generateDetailedFindingsHTML(findings) {
+        function generateDetailedFindingsHTML(findings, audioClips) {
             let html = '';
+            
+            // Find matching audio clip
+            function findClip(incidentType, timestamp) {
+                for (let clip of audioClips) {
+                    if (clip.incident_type === incidentType) {
+                        try {
+                            const startTime = parseFloat(timestamp.split(' - ')[0].replace('s', ''));
+                            if (Math.abs(clip.start_time - startTime) < 1.0) {
+                                return clip;
+                            }
+                        } catch(e) {}
+                    }
+                }
+                return null;
+            }
             
             if (findings.emotional_analysis && findings.emotional_analysis.length > 0) {
                 html += '<h3>ניתוח רגשי</h3>';
                 findings.emotional_analysis.forEach(emotion => {
+                    const clip = findClip('emotion', emotion.timestamp);
                     html += `<div class="finding">
                         <strong>${emotion.timestamp}</strong> - ${emotion.detected_emotion} (${emotion.severity})
+                        ${clip ? `<div class="audio-player">
+                            <p><strong>🎵 האזן לאירוע:</strong></p>
+                            <audio controls>
+                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
+                                הדפדפן שלך לא תומך בנגן אודיו
+                            </audio>
+                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
+                        </div>` : ''}
                     </div>`;
                 });
             }
@@ -722,8 +1249,17 @@ def create_html_template():
             if (findings.violence_analysis && findings.violence_analysis.length > 0) {
                 html += '<h3>ניתוח אלימות</h3>';
                 findings.violence_analysis.forEach(violence => {
+                    const clip = findClip('violence', violence.timestamp);
                     html += `<div class="finding">
                         <strong>${violence.timestamp}</strong> - ${violence.violence_types} (${violence.severity})
+                        ${clip ? `<div class="audio-player">
+                            <p><strong>🎵 האזן לאירוע:</strong></p>
+                            <audio controls>
+                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
+                                הדפדפן שלך לא תומך בנגן אודיו
+                            </audio>
+                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
+                        </div>` : ''}
                     </div>`;
                 });
             }
@@ -731,14 +1267,42 @@ def create_html_template():
             if (findings.cry_analysis && findings.cry_analysis.length > 0) {
                 html += '<h3>ניתוח בכי</h3>';
                 findings.cry_analysis.forEach(cry => {
+                    const clip = findClip('cry', cry.timestamp);
                     html += `<div class="finding">
                         <strong>${cry.timestamp}</strong> - ${cry.description}
+                        ${clip ? `<div class="audio-player">
+                            <p><strong>🎵 האזן לאירוע:</strong></p>
+                            <audio controls>
+                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
+                                הדפדפן שלך לא תומך בנגן אודיו
+                            </audio>
+                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
+                        </div>` : ''}
+                    </div>`;
+                });
+            }
+            
+            if (findings.neglect_analysis && findings.neglect_analysis.length > 0) {
+                html += '<h3>ניתוח הזנחה</h3>';
+                findings.neglect_analysis.forEach(neglect => {
+                    const clip = findClip('neglect', neglect.timestamp);
+                    html += `<div class="finding">
+                        <strong>${neglect.timestamp}</strong> - ${neglect.description}
+                        ${clip ? `<div class="audio-player">
+                            <p><strong>🎵 האזן לאירוע:</strong></p>
+                            <audio controls>
+                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
+                                הדפדפן שלך לא תומך בנגן אודיו
+                            </audio>
+                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
+                        </div>` : ''}
                     </div>`;
                 });
             }
             
             return html;
         }
+        
         
         // Load reports on page load
         document.addEventListener('DOMContentLoaded', function() {

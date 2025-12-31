@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
+venv/
+ENV/
 build/
 develop-eggs/
 dist/
@@ -19,14 +22,19 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
-# Virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
+# Audio files
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.aac
+*.ogg
+
+# Reports and uploads
+reports/
+uploads/
+models/
 
 # IDE
 .vscode/
@@ -37,58 +45,24 @@ venv.bak/
 
 # OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Audio files
-*.wav
-*.mp3
-*.m4a
-*.flac
-*.aac
-*.ogg
-*.wma
-
-# Generated files
-uploads/
-reports/
+# Logs
 *.log
-*.tmp
-
-# Models and data
-models/
-*.pkl
-*.h5
-*.model
-
-# Jupyter Notebooks
-.ipynb_checkpoints
 
 # Environment variables
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
-# Flask
-instance/
-.webassets-cache
+# Temporary files
+*.tmp
+*.temp
+*.bak
 
-# Coverage reports
-htmlcov/
-.coverage
-.coverage.*
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
+# Cursor/VS Code
+.cursor/
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# User-specific files
+*.user
+*.suo

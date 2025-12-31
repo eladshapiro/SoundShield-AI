@@ -230,7 +230,11 @@ class ReportGenerator:
         unanswered_cries = len(analysis_results.get('unanswered_cries', []))
         neglect_incidents = len(analysis_results.get('ignored_distress_episodes', []))
         
-        summary['total_incidents'] = emotion_incidents + violence_incidents + unanswered_cries + neglect_incidents
+        # Count inappropriate language incidents
+        inappropriate_lang = analysis_results.get('inappropriate_language', {})
+        inappropriate_words = inappropriate_lang.get('detected_inappropriate_words', 0)
+        
+        summary['total_incidents'] = emotion_incidents + violence_incidents + unanswered_cries + neglect_incidents + inappropriate_words
         
         # Count critical incidents
         critical_count = 0
@@ -264,6 +268,17 @@ class ReportGenerator:
         if emotion_incidents > 0:
             key_findings.append(f"זוהו {emotion_incidents} אירועי רגשות מדאיגים")
         
+        if inappropriate_words > 0:
+            # Count by severity
+            words_by_severity = inappropriate_lang.get('words_by_severity', {})
+            critical_words = len(words_by_severity.get('critical', []))
+            high_words = len(words_by_severity.get('high', []))
+            
+            if critical_words > 0:
+                key_findings.append(f"⚠️ זוהו {inappropriate_words} מילים לא הולמות ({critical_words} קריטיות)")
+            else:
+                key_findings.append(f"זוהו {inappropriate_words} מילים לא הולמות")
+        
         neglect_severity = neglect_analysis.get('neglect_severity', 'none')
         if neglect_severity != 'none':
             severity_hebrew = self.translations['severity_levels'].get(neglect_severity, neglect_severity)
@@ -271,11 +286,20 @@ class ReportGenerator:
         
         summary['key_findings'] = key_findings
         
+        # Count critical inappropriate words
+        words_by_severity = inappropriate_lang.get('words_by_severity', {})
+        critical_inappropriate = len(words_by_severity.get('critical', []))
+        high_inappropriate = len(words_by_severity.get('high', []))
+        
+        # Adjust critical count for inappropriate language
+        if critical_inappropriate > 0:
+            critical_count += critical_inappropriate
+        
         # Determine overall assessment
-        if critical_count > 0:
+        if critical_count > 0 or critical_inappropriate > 0:
             summary['overall_assessment'] = 'critical'
             summary['risk_level'] = 'critical'
-        elif summary['total_incidents'] > 5:
+        elif summary['total_incidents'] > 5 or high_inappropriate > 2:
             summary['overall_assessment'] = 'concerning'
             summary['risk_level'] = 'high'
         elif summary['total_incidents'] > 2:
@@ -296,7 +320,8 @@ class ReportGenerator:
             'emotional_analysis': [],
             'violence_analysis': [],
             'cry_analysis': [],
-            'neglect_analysis': []
+            'neglect_analysis': [],
+            'inappropriate_language': []
         }
         
         # Emotional analysis findings
@@ -337,6 +362,15 @@ class ReportGenerator:
             }
             findings['cry_analysis'].append(cry_data)
         
+        # Advanced analysis findings
+        advanced_analysis = analysis_results.get('advanced_analysis', {})
+        if advanced_analysis:
+            findings['advanced_analysis'] = {
+                'whisper_transcription': advanced_analysis.get('whisper_analysis', {}),
+                'emotion_detection': advanced_analysis.get('emotion_analysis', {}),
+                'combined_insights': advanced_analysis.get('combined_insights', {})
+            }
+        
         # Neglect analysis findings
         neglect_analysis = analysis_results.get('neglect_analysis', {})
         
@@ -349,6 +383,23 @@ class ReportGenerator:
                 'description': f"בכי שנמשך {unanswered_cry['cry_duration']:.1f} שניות ללא תגובת צוות"
             }
             findings['neglect_analysis'].append(neglect_data)
+        
+        # Inappropriate language findings
+        inappropriate_language = analysis_results.get('inappropriate_language', {})
+        if inappropriate_language.get('detected_words'):
+            for word_data in inappropriate_language['detected_words']:
+                lang_display = 'עברית' if word_data['language'] == 'hebrew' else 'אנגלית'
+                lang_display_en = 'Hebrew' if word_data['language'] == 'hebrew' else 'English'
+                
+                inappropriate_data = {
+                    'timestamp': f"{word_data['timestamp']:.1f}s",
+                    'word': word_data['word'],
+                    'language': f"{lang_display} / {lang_display_en}",
+                    'severity': self.translations['severity_levels'].get(word_data['severity'], word_data['severity']),
+                    'context': word_data.get('context', '')[:100],  # First 100 chars
+                    'description': f"מילה לא הולמת: '{word_data['word']}' ({lang_display})"
+                }
+                findings['inappropriate_language'].append(inappropriate_data)
         
         return findings
     
@@ -364,6 +415,17 @@ class ReportGenerator:
         if violence_segments:
             recommendations.append("מומלץ להעביר הדרכה לצוות על ניהול קונפליקטים ותקשורת עם ילדים")
             recommendations.append("יש לשקול מעקב נוסף אחר התנהגות הצוות בזמן הקונפליקטים")
+        
+        # Inappropriate language recommendations
+        inappropriate_lang = analysis_results.get('inappropriate_language', {})
+        if inappropriate_lang.get('detected_inappropriate_words', 0) > 0:
+            recommendations.append("⚠️ זוהו מילים לא הולמות - יש להעביר הדרכה על תקשורת מקצועית")
+            recommendations.append("⚠️ Inappropriate language detected - professional communication training needed")
+            
+            words_by_severity = inappropriate_lang.get('words_by_severity', {})
+            if len(words_by_severity.get('critical', [])) > 0:
+                recommendations.append("⚠️ זוהו מילים קריטיות - יש לבצע בדיקה מיידית")
+                recommendations.append("⚠️ Critical words detected - immediate investigation required")
         
         # Neglect recommendations
         neglect_analysis = analysis_results.get('neglect_analysis', {})
@@ -658,6 +720,23 @@ class ReportGenerator:
                     <p><strong>חומרת הזנחה:</strong> {neglect['neglect_severity']}</p>
                     <p>{neglect['description']}</p>
                     {self._generate_audio_player(matching_clip, f"neglect_{i}") if matching_clip else ""}
+                </div>
+                """
+        
+        # Inappropriate language analysis
+        if report['detailed_findings'].get('inappropriate_language'):
+            html += "<h3>⚠️ זיהוי שפה לא הולמת וקללות</h3>"
+            for i, word_data in enumerate(report['detailed_findings']['inappropriate_language']):
+                severity_class = f"severity-{word_data.get('severity', 'medium')}"
+                
+                html += f"""
+                <div class="incident {severity_class}">
+                    <p class="timestamp">⏱️ {word_data['timestamp']}</p>
+                    <p><strong>מילה / Word:</strong> <span style="color: #721c24; font-weight: bold;">{word_data['word']}</span></p>
+                    <p><strong>שפה / Language:</strong> {word_data['language']}</p>
+                    <p><strong>חומרה / Severity:</strong> <span class="severity-badge severity-{word_data.get('severity', 'medium')}">{word_data['severity']}</span></p>
+                    {f"<p><strong>הקשר / Context:</strong> <em>{word_data.get('context', '')[:150]}...</em></p>" if word_data.get('context') else ""}
+                    <p>{word_data['description']}</p>
                 </div>
                 """
         

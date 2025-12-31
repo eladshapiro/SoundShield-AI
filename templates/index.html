@@ -229,9 +229,113 @@
             margin: 0 auto 20px;
         }
         
+        .progress-message {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            text-align: center;
+            font-size: 1.1em;
+            color: #667eea;
+            font-weight: bold;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .progress-steps {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .step-indicator.active {
+            background-color: #e8f4f8;
+            border-left: 4px solid #667eea;
+        }
+        
+        .step-indicator.completed {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            background-color: #ddd;
+            color: #666;
+        }
+        
+        .step-indicator.active .step-number {
+            background-color: #667eea;
+            color: white;
+        }
+        
+        .step-indicator.completed .step-number {
+            background-color: #28a745;
+            color: white;
+        }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        
+        .language-selector {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .language-selector label {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #667eea;
+        }
+        
+        .language-selector select {
+            padding: 10px 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .language-selector select:hover {
+            border-color: #667eea;
+        }
+        
+        .language-selector select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
         @media (max-width: 768px) {
@@ -239,6 +343,7 @@
             .header h1 { font-size: 2em; }
             .results-grid { grid-template-columns: 1fr; }
             .report-item { flex-direction: column; gap: 10px; }
+            .language-selector { flex-direction: column; align-items: flex-start; }
         }
     </style>
 </head>
@@ -247,6 +352,14 @@
         <div class="header">
             <h1>מערכת ניתוח הקלטות גן ילדים</h1>
             <p>Kindergarten Recording Analyzer</p>
+        </div>
+        
+        <div class="language-selector">
+            <label for="languageSelect">🌐 שפת הניתוח / Analysis Language:</label>
+            <select id="languageSelect">
+                <option value="he">עברית (Hebrew)</option>
+                <option value="en">English (אנגלית)</option>
+            </select>
         </div>
         
         <div class="upload-section">
@@ -267,7 +380,39 @@
         
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>מעבד את הקובץ... זה יכול לקחת מספר דקות</p>
+            <div class="progress-message" id="progressMessage">
+                מתחיל ניתוח... / Starting analysis...
+            </div>
+            <div class="progress-steps" id="progressSteps" style="display: none;">
+                <div class="step-indicator" id="step1">
+                    <div class="step-number">1</div>
+                    <span>ניתוח אודיו בסיסי / Basic audio analysis</span>
+                </div>
+                <div class="step-indicator" id="step2">
+                    <div class="step-number">2</div>
+                    <span>זיהוי רגשות / Emotion detection</span>
+                </div>
+                <div class="step-indicator" id="step3">
+                    <div class="step-number">3</div>
+                    <span>זיהוי בכי / Baby cry detection</span>
+                </div>
+                <div class="step-indicator" id="step4">
+                    <div class="step-number">4</div>
+                    <span>זיהוי אלימות / Violence detection</span>
+                </div>
+                <div class="step-indicator" id="step5">
+                    <div class="step-number">5</div>
+                    <span>זיהוי הזנחה / Neglect detection</span>
+                </div>
+                <div class="step-indicator" id="step6">
+                    <div class="step-number">6</div>
+                    <span>ניתוח מתקדם / Advanced analysis</span>
+                </div>
+                <div class="step-indicator" id="step7">
+                    <div class="step-number">7</div>
+                    <span>זיהוי שפה לא הולמת / Inappropriate language detection</span>
+                </div>
+            </div>
         </div>
         
         <div class="results-section" id="resultsSection">
@@ -321,22 +466,96 @@
             }
         });
         
+        let progressCheckInterval = null;
+        
+        function updateProgressDisplay() {
+            fetch('/progress')
+                .then(response => response.json())
+                .then(data => {
+                    const progressMessage = document.getElementById('progressMessage');
+                    const progressSteps = document.getElementById('progressSteps');
+                    
+                    // Always show progress if we're checking
+                    if (data.status === 'analyzing' || data.status === 'initializing' || data.status === 'completed') {
+                        if (progressMessage) {
+                            progressMessage.textContent = data.message || 'מעבד... / Processing...';
+                        }
+                        if (progressSteps) {
+                            progressSteps.style.display = 'block';
+                        }
+                        
+                        // Update step indicators
+                        const currentStep = data.step || 0;
+                        for (let i = 1; i <= 7; i++) {
+                            const stepElement = document.getElementById('step' + i);
+                            if (stepElement) {
+                                if (i < currentStep) {
+                                    stepElement.className = 'step-indicator completed';
+                                } else if (i === currentStep && currentStep > 0) {
+                                    stepElement.className = 'step-indicator active';
+                                } else {
+                                    stepElement.className = 'step-indicator';
+                                }
+                            }
+                        }
+                        
+                        // Update progress bar
+                        const progressPercent = Math.min((currentStep / data.total_steps) * 100, 100);
+                        if (progressFill) {
+                            progressFill.style.width = progressPercent + '%';
+                        }
+                        
+                        // If completed, stop checking after a delay
+                        if (data.status === 'completed') {
+                            setTimeout(() => {
+                                if (progressCheckInterval) {
+                                    clearInterval(progressCheckInterval);
+                                    progressCheckInterval = null;
+                                }
+                            }, 2000);
+                        }
+                    } else if (data.status === 'idle') {
+                        // Only stop if we're not in the middle of an upload
+                        // Don't stop immediately, wait a bit
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching progress:', error);
+                });
+        }
+        
         function handleFile(file) {
             const formData = new FormData();
             formData.append('file', file);
+            
+            // Get selected language
+            const languageSelect = document.getElementById('languageSelect');
+            const selectedLanguage = languageSelect.value;
+            formData.append('language', selectedLanguage);
             
             // Show loading
             loading.style.display = 'block';
             progressBar.style.display = 'block';
             resultsSection.style.display = 'none';
             
-            // Simulate progress
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                progress += Math.random() * 10;
-                if (progress > 90) progress = 90;
-                progressFill.style.width = progress + '%';
-            }, 500);
+            // Show progress steps immediately
+            const progressSteps = document.getElementById('progressSteps');
+            progressSteps.style.display = 'block';
+            const progressMessage = document.getElementById('progressMessage');
+            progressMessage.textContent = 'מתחיל ניתוח... / Starting analysis...';
+            
+            // Reset progress steps
+            for (let i = 1; i <= 7; i++) {
+                const stepElement = document.getElementById('step' + i);
+                stepElement.className = 'step-indicator';
+            }
+            
+            // Start checking progress every 300ms (more frequent)
+            if (progressCheckInterval) {
+                clearInterval(progressCheckInterval);
+            }
+            progressCheckInterval = setInterval(updateProgressDisplay, 300);
+            updateProgressDisplay(); // Call immediately
             
             fetch('/upload', {
                 method: 'POST',
@@ -344,7 +563,10 @@
             })
             .then(response => response.json())
             .then(data => {
-                clearInterval(progressInterval);
+                if (progressCheckInterval) {
+                    clearInterval(progressCheckInterval);
+                    progressCheckInterval = null;
+                }
                 progressFill.style.width = '100%';
                 
                 setTimeout(() => {
@@ -361,7 +583,10 @@
                 }, 1000);
             })
             .catch(error => {
-                clearInterval(progressInterval);
+                if (progressCheckInterval) {
+                    clearInterval(progressCheckInterval);
+                    progressCheckInterval = null;
+                }
                 loading.style.display = 'none';
                 progressBar.style.display = 'none';
                 showAlert('שגיאה בהעלאת הקובץ: ' + error.message, 'error');
@@ -472,10 +697,22 @@
                             <meta charset="UTF-8">
                             <title>דוח ניתוח - ${data.report.metadata.file_name}</title>
                             <style>
-                                body { font-family: Arial, sans-serif; margin: 20px; }
+                                body { font-family: Arial, sans-serif; margin: 20px; background: #f5f7fa; }
                                 h1 { color: #667eea; }
                                 .summary { background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; }
                                 .finding { background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #667eea; }
+                                .audio-player { 
+                                    background: #e8f4f8; 
+                                    padding: 15px; 
+                                    border-radius: 8px; 
+                                    margin: 10px 0; 
+                                    border: 1px solid #dee2e6;
+                                }
+                                .audio-player audio { 
+                                    width: 100%; 
+                                    margin: 10px 0; 
+                                    border-radius: 5px;
+                                }
                             </style>
                         </head>
                         <body>
@@ -489,7 +726,7 @@
                             </div>
                             
                             <h2>ממצאים מפורטים</h2>
-                            ${generateDetailedFindingsHTML(data.report.detailed_findings)}
+                            ${generateDetailedFindingsHTML(data.report.detailed_findings, data.report.audio_clips || [])}
                             
                             <h2>המלצות</h2>
                             <ul>
@@ -505,14 +742,38 @@
             });
         }
         
-        function generateDetailedFindingsHTML(findings) {
+        function generateDetailedFindingsHTML(findings, audioClips) {
             let html = '';
+            
+            // Find matching audio clip
+            function findClip(incidentType, timestamp) {
+                for (let clip of audioClips) {
+                    if (clip.incident_type === incidentType) {
+                        try {
+                            const startTime = parseFloat(timestamp.split(' - ')[0].replace('s', ''));
+                            if (Math.abs(clip.start_time - startTime) < 1.0) {
+                                return clip;
+                            }
+                        } catch(e) {}
+                    }
+                }
+                return null;
+            }
             
             if (findings.emotional_analysis && findings.emotional_analysis.length > 0) {
                 html += '<h3>ניתוח רגשי</h3>';
                 findings.emotional_analysis.forEach(emotion => {
+                    const clip = findClip('emotion', emotion.timestamp);
                     html += `<div class="finding">
                         <strong>${emotion.timestamp}</strong> - ${emotion.detected_emotion} (${emotion.severity})
+                        ${clip ? `<div class="audio-player">
+                            <p><strong>🎵 האזן לאירוע:</strong></p>
+                            <audio controls>
+                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
+                                הדפדפן שלך לא תומך בנגן אודיו
+                            </audio>
+                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
+                        </div>` : ''}
                     </div>`;
                 });
             }
@@ -520,8 +781,17 @@
             if (findings.violence_analysis && findings.violence_analysis.length > 0) {
                 html += '<h3>ניתוח אלימות</h3>';
                 findings.violence_analysis.forEach(violence => {
+                    const clip = findClip('violence', violence.timestamp);
                     html += `<div class="finding">
                         <strong>${violence.timestamp}</strong> - ${violence.violence_types} (${violence.severity})
+                        ${clip ? `<div class="audio-player">
+                            <p><strong>🎵 האזן לאירוע:</strong></p>
+                            <audio controls>
+                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
+                                הדפדפן שלך לא תומך בנגן אודיו
+                            </audio>
+                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
+                        </div>` : ''}
                     </div>`;
                 });
             }
@@ -529,14 +799,42 @@
             if (findings.cry_analysis && findings.cry_analysis.length > 0) {
                 html += '<h3>ניתוח בכי</h3>';
                 findings.cry_analysis.forEach(cry => {
+                    const clip = findClip('cry', cry.timestamp);
                     html += `<div class="finding">
                         <strong>${cry.timestamp}</strong> - ${cry.description}
+                        ${clip ? `<div class="audio-player">
+                            <p><strong>🎵 האזן לאירוע:</strong></p>
+                            <audio controls>
+                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
+                                הדפדפן שלך לא תומך בנגן אודיו
+                            </audio>
+                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
+                        </div>` : ''}
+                    </div>`;
+                });
+            }
+            
+            if (findings.neglect_analysis && findings.neglect_analysis.length > 0) {
+                html += '<h3>ניתוח הזנחה</h3>';
+                findings.neglect_analysis.forEach(neglect => {
+                    const clip = findClip('neglect', neglect.timestamp);
+                    html += `<div class="finding">
+                        <strong>${neglect.timestamp}</strong> - ${neglect.description}
+                        ${clip ? `<div class="audio-player">
+                            <p><strong>🎵 האזן לאירוע:</strong></p>
+                            <audio controls>
+                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
+                                הדפדפן שלך לא תומך בנגן אודיו
+                            </audio>
+                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
+                        </div>` : ''}
                     </div>`;
                 });
             }
             
             return html;
         }
+        
         
         // Load reports on page load
         document.addEventListener('DOMContentLoaded', function() {
