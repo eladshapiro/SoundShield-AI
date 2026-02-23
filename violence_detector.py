@@ -163,6 +163,10 @@ class ViolenceDetector:
         
         return features
     
+    # Minimum absolute energy to consider any violence detection.
+    # Below this level the audio is too quiet for any violence type.
+    MIN_ENERGY_GATE = 0.05
+
     def _detect_violence_types(self, features: Dict) -> List[str]:
         """
         Detect specific types of violence based on features
@@ -174,6 +178,10 @@ class ViolenceDetector:
         Returns:
             List of detected violence types
         """
+        # B1 FIX: energy gate -- reject all violence for quiet audio
+        if features['mean_energy'] < self.MIN_ENERGY_GATE:
+            return []
+
         detected_types = []
         
         # Check for shouting
@@ -198,10 +206,14 @@ class ViolenceDetector:
             detected_types.append('threatening')
         
         # Check for physical violence indicators
+        # B1 FIX: require energy gate AND at least 2 of 3 conditions
         physical_thresholds = self.violence_thresholds['physical_violence_indicators']
-        if (features['max_energy'] > physical_thresholds['sudden_energy_spike_threshold'] or
-            features['high_frequency_ratio'] > physical_thresholds['high_frequency_content_threshold'] or
-            features['temporal_instability'] > physical_thresholds['rapid_changes_threshold']):
+        physical_hits = sum([
+            features['max_energy'] > physical_thresholds['sudden_energy_spike_threshold'],
+            features['high_frequency_ratio'] > physical_thresholds['high_frequency_content_threshold'],
+            features['temporal_instability'] > physical_thresholds['rapid_changes_threshold'],
+        ])
+        if physical_hits >= 2:
             detected_types.append('potential_physical_violence')
         
         return detected_types
@@ -320,6 +332,9 @@ class ViolenceDetector:
         
         return high_freq_ratio
     
+    MERGE_GAP_SECONDS = 1.5
+    MAX_MERGED_DURATION_SECONDS = 20.0
+
     def _merge_violence_segments(self, segments: List[Dict]) -> List[Dict]:
         """
         Merge nearby violence segments
@@ -334,21 +349,22 @@ class ViolenceDetector:
         if not segments:
             return []
         
-        # Sort segments by start time
         sorted_segments = sorted(segments, key=lambda x: x['start_time'])
         merged = [sorted_segments[0]]
         
         for current in sorted_segments[1:]:
             last = merged[-1]
             
-            # Merge if segments are within 3 seconds of each other
-            if current['start_time'] <= last['end_time'] + 3.0:
-                # Merge segments
+            would_merge_duration = max(last['end_time'], current['end_time']) - last['start_time']
+            gap_ok = current['start_time'] <= last['end_time'] + self.MERGE_GAP_SECONDS
+            duration_ok = would_merge_duration <= self.MAX_MERGED_DURATION_SECONDS
+
+            if gap_ok and duration_ok:
                 merged[-1] = {
                     'start_time': last['start_time'],
                     'end_time': max(last['end_time'], current['end_time']),
-                    'duration': max(last['end_time'], current['end_time']) - last['start_time'],
-                    'features': current['features'],  # Use more recent features
+                    'duration': would_merge_duration,
+                    'features': current['features'],
                     'violence_types': list(set(last['violence_types'] + current['violence_types'])),
                     'severity': max(last['severity'], current['severity'], key=lambda x: ['low', 'medium', 'high', 'critical'].index(x)),
                     'confidence': max(last['confidence'], current['confidence'])

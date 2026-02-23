@@ -558,6 +558,16 @@ class NeglectDetector:
         Calculate overall neglect score
         חישוב ציון הזנחה כללי
         
+        Weights:
+          unanswered cries  0.35
+          ignored distress  0.30  (raised from 0.20 -- direct harm indicator)
+          prolonged silence 0.20
+          lack of interact. 0.15
+        
+        The score is computed as a fraction of the *active* weights only --
+        categories with detections contribute their weighted score, and
+        categories without detections do NOT dilute the total.
+        
         Args:
             neglect_analysis: Complete neglect analysis results
             
@@ -565,53 +575,54 @@ class NeglectDetector:
             Neglect score between 0 and 1
         """
         score = 0.0
-        max_score = 0.0
-        
-        # Unanswered cries (weight: 0.4)
+        active_weight = 0.0
+
+        # Unanswered cries (weight: 0.35)
         unanswered_cries = neglect_analysis.get('unanswered_cries', [])
         if unanswered_cries:
             cry_scores = []
             for cry in unanswered_cries:
-                severity_scores = {'low': 0.2, 'medium': 0.5, 'high': 0.8, 'critical': 1.0}
-                cry_scores.append(severity_scores.get(cry.get('neglect_severity', 'low'), 0.2))
-            
-            score += np.mean(cry_scores) * 0.4
-        max_score += 0.4
+                severity_scores = {'low': 0.3, 'medium': 0.6, 'high': 0.85, 'critical': 1.0}
+                cry_scores.append(severity_scores.get(cry.get('neglect_severity', 'low'), 0.3))
+            score += np.mean(cry_scores) * 0.35
+            active_weight += 0.35
         
-        # Prolonged silence (weight: 0.2)
+        # Ignored distress (weight: 0.30 -- raised)
+        ignored_distress = neglect_analysis.get('ignored_distress_episodes', [])
+        if ignored_distress:
+            distress_scores = []
+            for episode in ignored_distress:
+                severity_scores = {'low': 0.4, 'medium': 0.65, 'high': 0.85, 'critical': 1.0}
+                distress_scores.append(severity_scores.get(episode.get('severity', 'low'), 0.4))
+            # Bonus: more ignored episodes = worse
+            count_multiplier = min(1.0 + 0.1 * (len(ignored_distress) - 1), 1.5)
+            score += np.mean(distress_scores) * count_multiplier * 0.30
+            active_weight += 0.30
+
+        # Prolonged silence (weight: 0.20)
         silence_periods = neglect_analysis.get('prolonged_silence_periods', [])
         if silence_periods:
             silence_scores = []
             for silence in silence_periods:
                 severity_scores = {'low': 0.2, 'medium': 0.4, 'high': 0.6, 'critical': 0.8}
                 silence_scores.append(severity_scores.get(silence.get('severity', 'low'), 0.2))
-            
-            score += np.mean(silence_scores) * 0.2
-        max_score += 0.2
+            score += np.mean(silence_scores) * 0.20
+            active_weight += 0.20
         
-        # Lack of interaction (weight: 0.2)
+        # Lack of interaction (weight: 0.15)
         interaction_periods = neglect_analysis.get('lack_of_interaction_periods', [])
         if interaction_periods:
             interaction_scores = []
             for period in interaction_periods:
                 severity_scores = {'low': 0.2, 'medium': 0.4, 'high': 0.6, 'critical': 0.8}
                 interaction_scores.append(severity_scores.get(period.get('severity', 'low'), 0.2))
-            
-            score += np.mean(interaction_scores) * 0.2
-        max_score += 0.2
+            score += np.mean(interaction_scores) * 0.15
+            active_weight += 0.15
         
-        # Ignored distress (weight: 0.2)
-        ignored_distress = neglect_analysis.get('ignored_distress_episodes', [])
-        if ignored_distress:
-            distress_scores = []
-            for episode in ignored_distress:
-                severity_scores = {'low': 0.3, 'medium': 0.5, 'high': 0.7, 'critical': 1.0}
-                distress_scores.append(severity_scores.get(episode.get('severity', 'low'), 0.3))
-            
-            score += np.mean(distress_scores) * 0.2
-        max_score += 0.2
-        
-        return score / max_score if max_score > 0 else 0.0
+        if active_weight == 0:
+            return 0.0
+
+        return min(score / active_weight, 1.0)
     
     def _determine_neglect_severity(self, neglect_score: float) -> str:
         """
@@ -624,13 +635,13 @@ class NeglectDetector:
         Returns:
             Severity level
         """
-        if neglect_score < 0.2:
+        if neglect_score < 0.15:
             return 'none'
-        elif neglect_score < 0.4:
+        elif neglect_score < 0.35:
             return 'low'
-        elif neglect_score < 0.6:
+        elif neglect_score < 0.55:
             return 'medium'
-        elif neglect_score < 0.8:
+        elif neglect_score < 0.75:
             return 'high'
         else:
             return 'critical'

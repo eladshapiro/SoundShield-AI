@@ -5,12 +5,25 @@ Report Generation Module for Kindergarten Recording Analyzer
 
 import json
 import csv
+import sys
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import os
 import librosa
 import soundfile as sf
 import numpy as np
+
+# Fix encoding for Windows console
+if sys.platform == 'win32':
+    import io
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except AttributeError:
+        pass  # Already wrapped
+
+logger = logging.getLogger(__name__)
 
 class ReportGenerator:
     def __init__(self, output_dir: str = "reports"):
@@ -70,8 +83,7 @@ class ReportGenerator:
         Extract audio clips for each incident so parents can listen
         חילוץ קטעי אודיו לכל אירוע כדי שהורים יוכלו לשמוע
         """
-        print("יוצר קטעי אודיו לאירועים...")
-        print("Creating audio clips for incidents...")
+        logger.info("Creating audio clips for incidents...")
         
         clips = []
         
@@ -116,12 +128,10 @@ class ReportGenerator:
                 if clip_info:
                     clips.append(clip_info)
             
-            print(f"נוצרו {len(clips)} קטעי אודיו")
-            print(f"Created {len(clips)} audio clips")
+            logger.info(f"Created {len(clips)} audio clips")
             
         except Exception as e:
-            print(f"שגיאה ביצירת קטעי אודיו: {str(e)}")
-            print(f"Error creating audio clips: {str(e)}")
+            logger.error(f"Error creating audio clips: {e}")
         
         return clips
     
@@ -168,7 +178,7 @@ class ReportGenerator:
             }
             
         except Exception as e:
-            print(f"שגיאה בחילוץ קטע: {str(e)}")
+            logger.error(f"Error extracting audio clip: {e}")
             return None
 
     def generate_comprehensive_report(self, analysis_results: Dict, 
@@ -572,7 +582,7 @@ class ReportGenerator:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
         
-        print(f"JSON report saved: {filepath}")
+        logger.info(f"JSON report saved: {filepath}")
     
     def _save_html_report(self, report: Dict):
         """Save report as HTML file"""
@@ -584,7 +594,7 @@ class ReportGenerator:
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        print(f"HTML report saved: {filepath}")
+        logger.info(f"HTML report saved: {filepath}")
     
     def _generate_html_content(self, report: Dict) -> str:
         """Generate HTML content for report"""
@@ -834,10 +844,10 @@ class ReportGenerator:
                     neglect['description']
                 ])
         
-        print(f"CSV report saved: {filepath}")
+        logger.info(f"CSV report saved: {filepath}")
+
 
 if __name__ == "__main__":
-    # Test the report generator
     generator = ReportGenerator()
     print("Report Generator initialized successfully")
     print("Ready to generate comprehensive reports...")

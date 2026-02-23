@@ -120,7 +120,37 @@ class CryDetector:
         zcr = librosa.feature.zero_crossing_rate(audio)[0]
         features['mean_zero_crossing_rate'] = np.mean(zcr)
         
-        # Pitch features (using chroma as proxy)
+        # F0 estimation via pyin for more accurate pitch tracking
+        f0, voiced_flag, _ = librosa.pyin(
+            audio, fmin=80, fmax=1000, sr=sr
+        )
+        voiced_f0 = f0[voiced_flag] if voiced_flag is not None else f0[~np.isnan(f0)]
+        if len(voiced_f0) > 1:
+            features['f0_mean'] = float(np.nanmean(voiced_f0))
+            features['f0_std'] = float(np.nanstd(voiced_f0))
+            features['voiced_ratio'] = float(np.sum(voiced_flag) / len(voiced_flag)) if voiced_flag is not None else 0.0
+        else:
+            features['f0_mean'] = 0.0
+            features['f0_std'] = 0.0
+            features['voiced_ratio'] = 0.0
+
+        # Check F0 in cry range (more reliable than chroma)
+        features['f0_in_cry_range'] = cry_freq_min <= features['f0_mean'] <= cry_freq_max
+
+        # Spectral flatness -- cries are more harmonic (lower flatness) than noise
+        spectral_flatness = librosa.feature.spectral_flatness(y=audio)[0]
+        features['mean_spectral_flatness'] = float(np.mean(spectral_flatness))
+
+        # Amplitude modulation depth (sobbing pattern creates strong AM)
+        envelope = np.abs(audio)
+        if len(envelope) > sr // 2:
+            env_smooth = np.convolve(envelope, np.ones(sr // 10) / (sr // 10), mode='same')
+            am_depth = (np.max(env_smooth) - np.min(env_smooth)) / (np.max(env_smooth) + 1e-10)
+            features['am_depth'] = float(am_depth)
+        else:
+            features['am_depth'] = 0.0
+
+        # Legacy chroma-based pitch variance (kept for backward compat)
         chroma = librosa.feature.chroma_stft(y=audio, sr=sr)
         pitch_variance = np.var(chroma, axis=1)
         features['mean_pitch_variance'] = np.mean(pitch_variance)
@@ -140,47 +170,66 @@ class CryDetector:
         Determine if a segment contains a baby cry
         קביעה אם קטע מכיל בכי תינוק
         
+        Uses a weighted scoring system with F0-based pitch detection,
+        amplitude modulation depth, spectral flatness, and energy.
+        
         Args:
             features: Dictionary of audio features
             
         Returns:
             True if segment likely contains a cry
         """
+        # Hard energy gate: too quiet to be a baby cry
+        if features['mean_energy'] < self.cry_features['energy_threshold']:
+            return False
+
         score = 0
         max_score = 0
         
-        # Energy check
-        if features['mean_energy'] > self.cry_features['energy_threshold']:
-            score += 2
+        # Energy check (weight 2) -- always passes when we reach here
+        score += 2
         max_score += 2
         
-        # Frequency range check
-        if features['in_cry_frequency_range']:
+        # F0-based frequency check (weight 3) -- preferred over chroma
+        if features.get('f0_in_cry_range', False):
             score += 3
+        elif features['in_cry_frequency_range']:
+            score += 2  # partial credit from spectral centroid
         max_score += 3
         
-        # Pitch variance (cries have variable pitch)
-        if features['mean_pitch_variance'] > self.cry_features['pitch_variance_threshold']:
+        # Voiced ratio -- cries are mostly voiced (weight 2)
+        if features.get('voiced_ratio', 0) > 0.3:
             score += 2
         max_score += 2
+
+        # Amplitude modulation -- sobbing pattern (weight 2)
+        if features.get('am_depth', 0) > 0.3:
+            score += 2
+        max_score += 2
+
+        # Spectral flatness -- cries are harmonic, not noisy (weight 1)
+        if features.get('mean_spectral_flatness', 1.0) < 0.3:
+            score += 1
+        max_score += 1
+
+        # Pitch variance via F0 std -- cries vary in pitch (weight 1)
+        if features.get('f0_std', 0) > 20:
+            score += 1
+        elif features['mean_pitch_variance'] > self.cry_features['pitch_variance_threshold']:
+            score += 1
+        max_score += 1
         
-        # Spectral rolloff (cries have high frequency content)
+        # Spectral rolloff (weight 1)
         if features['mean_spectral_rolloff'] > self.cry_features['spectral_rolloff_threshold']:
             score += 1
         max_score += 1
         
-        # Zero crossing rate (not too high for cries)
-        if features['mean_zero_crossing_rate'] < self.cry_features['zero_crossing_rate_threshold']:
+        # Duration check (always true for 2s segments) (weight 1)
+        if 0.5 <= 2.0 <= 10.0:
             score += 1
         max_score += 1
         
-        # Duration check (basic - will be refined in merging)
-        if 0.5 <= 2.0 <= 10.0:  # segment length is 2 seconds
-            score += 1
-        max_score += 1
-        
-        # Threshold for cry detection
-        return (score / max_score) >= 0.6
+        return (score / max_score) >= 0.50
     
     def _calculate_cry_confidence(self, features: Dict) -> float:
         """
