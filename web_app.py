@@ -16,6 +16,7 @@ from werkzeug.utils import secure_filename
 from main import KindergartenRecordingAnalyzer
 from config import config
 from api_errors import register_error_handlers, APIError
+from audit_logger import AuditLogger
 
 # Import database
 try:
@@ -23,6 +24,9 @@ try:
     db = Database()
 except ImportError:
     db = None
+
+# Audit logger
+audit = AuditLogger()
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
@@ -867,6 +871,96 @@ def get_analysis_by_id(analysis_id):
         'analysis': analysis,
         'incidents': incidents
     })
+
+# =====================================================================
+# API v1 Endpoints
+# =====================================================================
+
+@app.route('/api/v1/analyses')
+def api_list_analyses():
+    """List analyses with pagination and filtering."""
+    if not db:
+        raise APIError('DB_UNAVAILABLE', 'Database not available.', 503)
+
+    limit = request.args.get('limit', 50, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    risk_level = request.args.get('risk_level')
+    query = request.args.get('q')
+
+    if query or risk_level:
+        results = db.search_analyses(query=query, risk_level=risk_level)
+    else:
+        results = db.get_analysis_history(limit=limit, offset=offset)
+
+    return jsonify({'data': results, 'count': len(results)})
+
+
+@app.route('/api/v1/analyses/<int:analysis_id>')
+def api_get_analysis(analysis_id):
+    """Get a specific analysis with incidents."""
+    if not db:
+        raise APIError('DB_UNAVAILABLE', 'Database not available.', 503)
+
+    analysis = db.get_analysis(analysis_id)
+    if not analysis:
+        from api_errors import analysis_not_found
+        raise analysis_not_found(analysis_id)
+
+    incidents = db.get_incidents(analysis_id)
+    audit.log_report_view(analysis_id, user_ip=request.remote_addr)
+
+    return jsonify({
+        'data': {
+            'analysis': dict(analysis),
+            'incidents': [dict(i) for i in incidents],
+        }
+    })
+
+
+@app.route('/api/v1/analyses/<int:analysis_id>', methods=['DELETE'])
+def api_delete_analysis(analysis_id):
+    """Delete an analysis and its associated data."""
+    if not db:
+        raise APIError('DB_UNAVAILABLE', 'Database not available.', 503)
+
+    deleted = db.delete_analysis(analysis_id)
+    if not deleted:
+        from api_errors import analysis_not_found
+        raise analysis_not_found(analysis_id)
+
+    audit.log_deletion('analysis', str(analysis_id),
+                       user_ip=request.remote_addr)
+    return jsonify({'success': True, 'message': f'Analysis {analysis_id} deleted.'})
+
+
+@app.route('/api/v1/stats')
+def api_stats():
+    """System statistics."""
+    if not db:
+        raise APIError('DB_UNAVAILABLE', 'Database not available.', 503)
+
+    stats = db.get_stats()
+    return jsonify({'data': stats})
+
+
+@app.route('/api/v1/audit-log')
+def api_audit_log():
+    """Retrieve audit log entries."""
+    limit = request.args.get('limit', 100, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    logs = audit.get_recent_logs(limit=limit, offset=offset)
+    return jsonify({'data': logs, 'count': len(logs)})
+
+
+@app.route('/api/v1/cleanup', methods=['POST'])
+def api_cleanup():
+    """Trigger data retention cleanup."""
+    days = request.json.get('retention_days') if request.is_json else None
+    deleted = db.cleanup_old_data(days)
+    audit.log('data_cleanup', details={'deleted_count': deleted,
+                                        'retention_days': days or config.database.retention_days})
+    return jsonify({'success': True, 'deleted': deleted})
+
 
 def create_html_template():
     """Create basic HTML template for the web interface"""

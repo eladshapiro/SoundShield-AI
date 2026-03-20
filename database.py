@@ -6,12 +6,14 @@ import sqlite3
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+
+from config import config
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'soundshield.db')
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), config.database.db_path)
 
 
 class Database:
@@ -65,8 +67,11 @@ class Database:
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_analyses_upload_time ON analyses(upload_time);
+                CREATE INDEX IF NOT EXISTS idx_analyses_risk_level ON analyses(risk_level);
                 CREATE INDEX IF NOT EXISTS idx_incidents_analysis_id ON incidents(analysis_id);
                 CREATE INDEX IF NOT EXISTS idx_incidents_type ON incidents(type);
+                CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents(severity);
+                CREATE INDEX IF NOT EXISTS idx_incidents_type_severity ON incidents(type, severity);
             ''')
             conn.commit()
             logger.info(f"Database initialized at {self.db_path}")
@@ -302,5 +307,43 @@ class Database:
             conn.execute('DELETE FROM analyses WHERE id = ?', (analysis_id,))
             conn.commit()
             return conn.total_changes > 0
+        finally:
+            conn.close()
+
+    def cleanup_old_data(self, retention_days: int = None) -> int:
+        """Delete analyses older than retention_days. Returns count deleted.
+
+        Also removes associated incidents via ON DELETE CASCADE.
+        """
+        days = retention_days or config.database.retention_days
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        conn = self._get_conn()
+        try:
+            cursor = conn.execute(
+                'DELETE FROM analyses WHERE upload_time < ?', (cutoff,)
+            )
+            deleted = cursor.rowcount
+            conn.commit()
+            if deleted:
+                logger.info(f"Data retention: deleted {deleted} analyses older than {days} days")
+            return deleted
+        finally:
+            conn.close()
+
+    def get_stats(self) -> Dict:
+        """Get database statistics for the health endpoint."""
+        conn = self._get_conn()
+        try:
+            total = conn.execute('SELECT COUNT(*) FROM analyses').fetchone()[0]
+            by_risk = conn.execute('''
+                SELECT risk_level, COUNT(*) as cnt
+                FROM analyses GROUP BY risk_level
+            ''').fetchall()
+            incident_count = conn.execute('SELECT COUNT(*) FROM incidents').fetchone()[0]
+            return {
+                'total_analyses': total,
+                'total_incidents': incident_count,
+                'by_risk_level': {row['risk_level']: row['cnt'] for row in by_risk},
+            }
         finally:
             conn.close()
