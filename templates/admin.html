@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html x-data="adminState()" :lang="lang" :dir="dir" :class="{ 'dark': darkMode }">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title x-text="t('pageTitle')">SoundShield-AI Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            primary: { 50: '#EFF6FF', 100: '#DBEAFE', 200: '#BFDBFE', 300: '#93C5FD', 400: '#60A5FA', 500: '#3B82F6', 600: '#2563EB', 700: '#1D4ED8', 800: '#1E40AF', 900: '#1E3A8A' },
+            severity: { low: '#22C55E', medium: '#EAB308', high: '#F97316', critical: '#EF4444' }
+          }
+        }
+      }
+    }
+    </script>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-[#F8FAFC] dark:bg-[#0F172A] font-sans text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
+
+    <!-- Skip to content -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-md" x-text="t('skipToContent')">
+        Skip to main content
+    </a>
+
+    <!-- ===== TOP NAVIGATION BAR ===== -->
+    <nav class="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo / Title -->
+                <div class="flex items-center gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
+                        <!-- Shield icon -->
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-gray-900 dark:text-white">SoundShield-AI</h1>
+                        <p class="text-xs text-gray-500 dark:text-gray-400" x-text="t('subtitle')"></p>
+                    </div>
+                </div>
+
+                <!-- Right controls -->
+                <div class="flex items-center gap-2">
+                    <!-- Back to Dashboard -->
+                    <a href="/"
+                        class="px-3 py-2 rounded-lg text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors flex items-center gap-1.5 min-h-[44px]"
+                    >
+                        <svg class="w-4 h-4 rtl:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        </svg>
+                        <span x-text="t('backToDashboard')"></span>
+                    </a>
+
+                    <!-- Language toggle -->
+                    <button
+                        x-on:click="toggleLang()"
+                        class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        :aria-label="t('toggleLanguage')"
+                    >
+                        <svg class="w-4 h-4 me-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                        </svg>
+                        <span x-text="lang === 'en' ? 'HE' : 'EN'"></span>
+                    </button>
+
+                    <!-- Dark mode toggle -->
+                    <button
+                        x-on:click="darkMode = !darkMode"
+                        class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        :aria-label="t('toggleDarkMode')"
+                    >
+                        <!-- Sun icon (shown in dark mode) -->
+                        <svg x-show="darkMode" class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
+                        </svg>
+                        <!-- Moon icon (shown in light mode) -->
+                        <svg x-show="!darkMode" class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clip-rule="evenodd"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main id="main-content" class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Page Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="t('adminTitle')"></h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="t('adminSubtitle')"></p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+                    :class="health.status === 'healthy' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'"
+                >
+                    <span class="w-2 h-2 rounded-full" :class="health.status === 'healthy' ? 'bg-green-500' : 'bg-red-500'"></span>
+                    <span x-text="health.status === 'healthy' ? t('systemHealthy') : t('systemError')"></span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- ===== 1. SYSTEM HEALTH CARD ===== -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                        </svg>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white" x-text="t('systemHealth')"></h3>
+                    </div>
+                    <button @click="loadHealth()" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" :aria-label="t('refresh')">
+                        <svg class="w-4 h-4" :class="{ 'animate-spin': healthLoading }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <!-- Loading skeleton -->
+                    <template x-if="healthLoading">
+                        <div class="space-y-3 animate-pulse">
+                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+                        </div>
+                    </template>
+                    <!-- Health data -->
+                    <template x-if="!healthLoading">
+                        <div class="space-y-4">
+                            <!-- Version -->
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-500 dark:text-gray-400" x-text="t('version')"></span>
+                                <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="health.version || 'N/A'"></span>
+                            </div>
+                            <!-- Models loaded -->
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-500 dark:text-gray-400" x-text="t('whisperModel')"></span>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                                    :class="health.models?.whisper ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'"
+                                >
+                                    <span class="w-1.5 h-1.5 rounded-full" :class="health.models?.whisper ? 'bg-green-500' : 'bg-red-500'"></span>
+                                    <span x-text="health.models?.whisper ? t('loaded') : t('notLoaded')"></span>
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-500 dark:text-gray-400" x-text="t('hubertModel')"></span>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                                    :class="health.models?.hubert ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'"
+                                >
+                                    <span class="w-1.5 h-1.5 rounded-full" :class="health.models?.hubert ? 'bg-green-500' : 'bg-red-500'"></span>
+                                    <span x-text="health.models?.hubert ? t('loaded') : t('notLoaded')"></span>
+                                </span>
+                            </div>
+                            <!-- GPU Status -->
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-500 dark:text-gray-400" x-text="t('gpuStatus')"></span>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                                    :class="health.gpu?.available ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'"
+                                >
+                                    <span class="w-1.5 h-1.5 rounded-full" :class="health.gpu?.available ? 'bg-green-500' : 'bg-yellow-500'"></span>
+                                    <span x-text="health.gpu?.available ? (health.gpu.name || t('available')) : t('cpuOnly')"></span>
+                                </span>
+                            </div>
+                            <!-- Disk Space -->
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-500 dark:text-gray-400" x-text="t('diskSpace')"></span>
+                                <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="health.disk_space || 'N/A'"></span>
+                            </div>
+                            <!-- Disk usage bar -->
+                            <template x-if="health.disk_usage_percent !== undefined">
+                                <div>
+                                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                        <div class="h-2 rounded-full transition-all duration-500"
+                                            :class="health.disk_usage_percent > 90 ? 'bg-red-500' : health.disk_usage_percent > 70 ? 'bg-yellow-500' : 'bg-green-500'"
+                                            :style="'width: ' + health.disk_usage_percent + '%'"
+                                        ></div>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-1" x-text="health.disk_usage_percent + '% ' + t('used')"></p>
+                                </div>
+                            </template>
+                            <!-- Active Jobs -->
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-500 dark:text-gray-400" x-text="t('activeJobs')"></span>
+                                <span class="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full text-xs font-bold"
+                                    :class="health.active_jobs > 0 ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'"
+                                    x-text="health.active_jobs ?? 0"
+                                ></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- ===== 2. DATABASE STATS CARD ===== -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                        </svg>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white" x-text="t('databaseStats')"></h3>
+                    </div>
+                    <button @click="loadStats()" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" :aria-label="t('refresh')">
+                        <svg class="w-4 h-4" :class="{ 'animate-spin': statsLoading }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <!-- Loading skeleton -->
+                    <template x-if="statsLoading">
+                        <div class="space-y-3 animate-pulse">
+                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                        </div>
+                    </template>
+                    <!-- Stats data -->
+                    <template x-if="!statsLoading">
+                        <div class="space-y-4">
+                            <!-- Summary stats row -->
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 text-center">
+                                    <p class="text-2xl font-bold text-primary-600 dark:text-primary-400" x-text="stats.total_analyses ?? 0"></p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="t('totalAnalyses')"></p>
+                                </div>
+                                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 text-center">
+                                    <p class="text-2xl font-bold text-orange-600 dark:text-orange-400" x-text="stats.total_incidents ?? 0"></p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="t('totalIncidents')"></p>
+                                </div>
+                            </div>
+                            <!-- Risk level breakdown -->
+                            <div>
+                                <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="t('riskBreakdown')"></p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                                        <span x-text="t('low')"></span>: <span x-text="stats.risk_levels?.low ?? 0"></span>
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
+                                        <span x-text="t('medium')"></span>: <span x-text="stats.risk_levels?.medium ?? 0"></span>
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                                        <span x-text="t('high')"></span>: <span x-text="stats.risk_levels?.high ?? 0"></span>
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                                        <span x-text="t('critical')"></span>: <span x-text="stats.risk_levels?.critical ?? 0"></span>
+                                    </span>
+                                </div>
+                            </div>
+                            <!-- Cleanup section -->
+                            <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="t('dataCleanup')"></p>
+                                <div class="flex items-center gap-3">
+                                    <label class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="t('retentionDays')"></label>
+                                    <input type="number" x-model.number="cleanupDays" min="1" max="365" step="1"
+                                        class="w-20 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                    />
+                                    <button @click="runCleanup()" :disabled="cleanupRunning"
+                                        class="px-3 py-1.5 text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                                    >
+                                        <svg x-show="cleanupRunning" class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                        <span x-text="t('runCleanup')"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- ===== 3. DETECTION THRESHOLDS CARD ===== -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden lg:col-span-2">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                        </svg>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white" x-text="t('detectionThresholds')"></h3>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="resetAllThresholds()" :disabled="thresholdsSaving"
+                            class="px-3 py-1.5 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <span x-text="t('resetAllDefaults')"></span>
+                        </button>
+                        <button @click="loadThresholds()" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" :aria-label="t('refresh')">
+                            <svg class="w-4 h-4" :class="{ 'animate-spin': thresholdsLoading }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <!-- Loading skeleton -->
+                    <template x-if="thresholdsLoading">
+                        <div class="space-y-4 animate-pulse">
+                            <div class="h-10 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                            <div class="h-10 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                            <div class="h-10 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                        </div>
+                    </template>
+                    <!-- Thresholds data -->
+                    <template x-if="!thresholdsLoading">
+                        <div class="space-y-3">
+                            <!-- Detector sections -->
+                            <template x-for="(group, groupKey) in thresholdGroups" :key="groupKey">
+                                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                    <!-- Collapsible header -->
+                                    <button @click="group.open = !group.open"
+                                        class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors text-left"
+                                    >
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-3 h-3 rounded-full" :class="group.color"></span>
+                                            <span class="text-sm font-semibold text-gray-900 dark:text-white" x-text="t(group.labelKey)"></span>
+                                            <span class="text-xs text-gray-400 dark:text-gray-500" x-text="'(' + group.thresholds.length + ')'"></span>
+                                        </div>
+                                        <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="{ 'rotate-180': group.open }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </button>
+                                    <!-- Collapsible content -->
+                                    <div x-show="group.open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                                        <div class="px-4 py-3 space-y-4">
+                                            <template x-for="(th, thIdx) in group.thresholds" :key="th.key">
+                                                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                                                    <label class="text-sm text-gray-700 dark:text-gray-300 sm:w-48 flex-shrink-0" x-text="t(th.labelKey) || th.label"></label>
+                                                    <div class="flex items-center gap-3 flex-1">
+                                                        <input type="range"
+                                                            :min="th.min" :max="th.max" :step="th.step"
+                                                            x-model.number="th.value"
+                                                            class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer accent-primary-600"
+                                                        />
+                                                        <input type="number"
+                                                            :min="th.min" :max="th.max" :step="th.step"
+                                                            x-model.number="th.value"
+                                                            class="w-20 px-2 py-1 text-sm text-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <!-- Save button per group -->
+                                            <div class="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-700">
+                                                <button @click="saveGroupThresholds(groupKey)" :disabled="thresholdsSaving"
+                                                    class="px-4 py-2 text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                                                >
+                                                    <svg x-show="thresholdsSaving" class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                                    <span x-text="t('save')"></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- ===== 4. AUDIT LOG CARD ===== -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden lg:col-span-2">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                        </svg>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white" x-text="t('auditLog')"></h3>
+                    </div>
+                    <button @click="loadAuditLog(true)" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" :aria-label="t('refresh')">
+                        <svg class="w-4 h-4" :class="{ 'animate-spin': auditLoading }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <!-- Loading skeleton -->
+                    <template x-if="auditLoading && auditEntries.length === 0">
+                        <div class="space-y-3 animate-pulse">
+                            <div class="h-8 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                            <div class="h-8 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                            <div class="h-8 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                        </div>
+                    </template>
+                    <!-- Audit table -->
+                    <template x-if="!(auditLoading && auditEntries.length === 0)">
+                        <div>
+                            <!-- Empty state -->
+                            <template x-if="auditEntries.length === 0">
+                                <div class="text-center py-8">
+                                    <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                    </svg>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="t('noAuditEntries')"></p>
+                                </div>
+                            </template>
+                            <!-- Table -->
+                            <template x-if="auditEntries.length > 0">
+                                <div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm">
+                                            <thead>
+                                                <tr class="border-b border-gray-200 dark:border-gray-700">
+                                                    <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('timestamp')"></th>
+                                                    <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('action')"></th>
+                                                    <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('resource')"></th>
+                                                    <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('ipAddress')"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                                <template x-for="entry in auditEntries" :key="entry.id || entry.timestamp">
+                                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
+                                                        <td class="py-2 px-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                                            <span x-text="formatTimestamp(entry.timestamp)"></span>
+                                                        </td>
+                                                        <td class="py-2 px-3">
+                                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                                                                :class="actionBadgeClass(entry.action)"
+                                                                x-text="entry.action"
+                                                            ></span>
+                                                        </td>
+                                                        <td class="py-2 px-3 text-gray-900 dark:text-white font-medium" x-text="entry.resource"></td>
+                                                        <td class="py-2 px-3 text-gray-500 dark:text-gray-400 font-mono text-xs" x-text="entry.ip || 'N/A'"></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <!-- Load more -->
+                                    <div class="mt-4 text-center" x-show="auditHasMore">
+                                        <button @click="loadMoreAudit()" :disabled="auditLoading"
+                                            class="px-4 py-2 text-sm font-medium rounded-lg text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            <span x-show="auditLoading" class="inline-flex items-center gap-1.5">
+                                                <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                                <span x-text="t('loading')"></span>
+                                            </span>
+                                            <span x-show="!auditLoading" x-text="t('loadMore')"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div><!-- end grid -->
+    </main>
+
+    <!-- ===== TOAST NOTIFICATIONS ===== -->
+    <div class="fixed bottom-4 end-4 z-50 space-y-2" id="toast-container">
+        <template x-for="(toast, i) in toasts" :key="toast.id">
+            <div
+                x-show="toast.visible"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-2"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 translate-y-2"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg min-w-[300px] max-w-md"
+                :class="{
+                    'bg-green-600 text-white': toast.type === 'success',
+                    'bg-red-600 text-white': toast.type === 'error',
+                    'bg-blue-600 text-white': toast.type === 'info'
+                }"
+            >
+                <svg x-show="toast.type === 'success'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                <svg x-show="toast.type === 'error'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                <svg x-show="toast.type === 'info'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span class="text-sm font-medium" x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+
+    <!-- ===== SCRIPTS ===== -->
+    <script>
+    /* ========================================
+       Translations
+       ======================================== */
+    const translations = {
+        en: {
+            pageTitle: 'SoundShield-AI - Admin Dashboard',
+            subtitle: 'Admin Dashboard',
+            skipToContent: 'Skip to main content',
+            toggleLanguage: 'Toggle language',
+            toggleDarkMode: 'Toggle dark mode',
+            backToDashboard: 'Back to Dashboard',
+            adminTitle: 'Admin Dashboard',
+            adminSubtitle: 'System configuration, monitoring, and audit controls',
+            systemHealthy: 'Healthy',
+            systemError: 'Error',
+            refresh: 'Refresh',
+
+            // System Health
+            systemHealth: 'System Health',
+            version: 'Version',
+            whisperModel: 'Whisper Model',
+            hubertModel: 'HuBERT Model',
+            loaded: 'Loaded',
+            notLoaded: 'Not Loaded',
+            gpuStatus: 'GPU Status',
+            available: 'Available',
+            cpuOnly: 'CPU Only',
+            diskSpace: 'Disk Space',
+            used: 'used',
+            activeJobs: 'Active Jobs',
+
+            // Database Stats
+            databaseStats: 'Database Stats',
+            totalAnalyses: 'Total Analyses',
+            totalIncidents: 'Total Incidents',
+            riskBreakdown: 'Risk Level Breakdown',
+            low: 'Low',
+            medium: 'Medium',
+            high: 'High',
+            critical: 'Critical',
+            dataCleanup: 'Data Cleanup',
+            retentionDays: 'Retention (days):',
+            runCleanup: 'Run Cleanup',
+            cleanupSuccess: 'Cleanup completed successfully',
+            cleanupError: 'Cleanup failed',
+
+            // Detection Thresholds
+            detectionThresholds: 'Detection Thresholds',
+            resetAllDefaults: 'Reset All to Defaults',
+            save: 'Save',
+            saveSuccess: 'Thresholds saved successfully',
+            saveError: 'Failed to save thresholds',
+            resetSuccess: 'Thresholds reset to defaults',
+            resetError: 'Failed to reset thresholds',
+
+            // Detector groups
+            cryDetector: 'Cry Detector',
+            violenceDetector: 'Violence Detector',
+            emotionDetector: 'Emotion Detector',
+            neglectDetector: 'Neglect Detector',
+            audioAnalyzer: 'Audio Analyzer',
+
+            // Cry thresholds
+            cryEnergyThreshold: 'Cry Energy Threshold',
+            cryFrequencyMin: 'Min Cry Frequency (Hz)',
+            cryFrequencyMax: 'Max Cry Frequency (Hz)',
+            cryDurationMin: 'Min Cry Duration (s)',
+            cryIntensityThreshold: 'Cry Intensity Threshold',
+            cryResponseTimeout: 'Response Timeout (s)',
+
+            // Violence thresholds
+            violenceEnergyThreshold: 'Shouting Energy Threshold',
+            violenceAggressionThreshold: 'Aggression Threshold',
+            violenceThreatConfidence: 'Threat Confidence',
+            violenceFrequencyThreshold: 'Frequency Threshold (Hz)',
+            violenceDurationMin: 'Min Duration (s)',
+
+            // Emotion thresholds
+            emotionConfidenceThreshold: 'Confidence Threshold',
+            emotionAngerThreshold: 'Anger Threshold',
+            emotionFearThreshold: 'Fear Threshold',
+            emotionSadnessThreshold: 'Sadness Threshold',
+            emotionDistressThreshold: 'Distress Threshold',
+
+            // Neglect thresholds
+            neglectSilenceDuration: 'Silence Duration (s)',
+            neglectCryResponseTime: 'Cry Response Time (s)',
+            neglectInteractionGap: 'Interaction Gap (s)',
+            neglectMinInteractions: 'Min Interactions/Hour',
+            neglectConfidence: 'Confidence Threshold',
+
+            // Audio thresholds
+            audioNoiseFloor: 'Noise Floor (dB)',
+            audioSampleRate: 'Sample Rate (Hz)',
+            audioWindowSize: 'Window Size (s)',
+            audioCalibrationDuration: 'Calibration Duration (s)',
+            audioMinSegmentLength: 'Min Segment Length (s)',
+
+            // Audit Log
+            auditLog: 'Audit Log',
+            timestamp: 'Timestamp',
+            action: 'Action',
+            resource: 'Resource',
+            ipAddress: 'IP Address',
+            noAuditEntries: 'No audit log entries found',
+            loadMore: 'Load More',
+            loading: 'Loading...',
+        },
+        he: {
+            pageTitle: 'SoundShield-AI - לוח ניהול',
+            subtitle: 'לוח ניהול',
+            skipToContent: 'דלג לתוכן הראשי',
+            toggleLanguage: 'החלף שפה',
+            toggleDarkMode: 'מצב כהה/בהיר',
+            backToDashboard: 'חזרה ללוח הבקרה',
+            adminTitle: 'לוח ניהול',
+            adminSubtitle: 'הגדרות מערכת, ניטור ובקרת ביקורת',
+            systemHealthy: 'תקין',
+            systemError: 'שגיאה',
+            refresh: 'רענון',
+
+            // System Health
+            systemHealth: 'בריאות המערכת',
+            version: 'גרסה',
+            whisperModel: 'מודל Whisper',
+            hubertModel: 'מודל HuBERT',
+            loaded: 'נטען',
+            notLoaded: 'לא נטען',
+            gpuStatus: 'סטטוס GPU',
+            available: 'זמין',
+            cpuOnly: 'CPU בלבד',
+            diskSpace: 'שטח דיסק',
+            used: 'בשימוש',
+            activeJobs: 'עבודות פעילות',
+
+            // Database Stats
+            databaseStats: 'סטטיסטיקות מסד נתונים',
+            totalAnalyses: 'סה"כ ניתוחים',
+            totalIncidents: 'סה"כ אירועים',
+            riskBreakdown: 'פילוח רמות סיכון',
+            low: 'נמוך',
+            medium: 'בינוני',
+            high: 'גבוה',
+            critical: 'קריטי',
+            dataCleanup: 'ניקוי נתונים',
+            retentionDays: 'שמירה (ימים):',
+            runCleanup: 'הפעל ניקוי',
+            cleanupSuccess: 'הניקוי הושלם בהצלחה',
+            cleanupError: 'הניקוי נכשל',
+
+            // Detection Thresholds
+            detectionThresholds: 'ספי זיהוי',
+            resetAllDefaults: 'אפס הכל לברירת מחדל',
+            save: 'שמור',
+            saveSuccess: 'הספים נשמרו בהצלחה',
+            saveError: 'שמירת הספים נכשלה',
+            resetSuccess: 'הספים אופסו לברירת מחדל',
+            resetError: 'איפוס הספים נכשל',
+
+            // Detector groups
+            cryDetector: 'גלאי בכי',
+            violenceDetector: 'גלאי אלימות',
+            emotionDetector: 'גלאי רגשות',
+            neglectDetector: 'גלאי הזנחה',
+            audioAnalyzer: 'מנתח שמע',
+
+            // Cry thresholds
+            cryEnergyThreshold: 'סף אנרגיית בכי',
+            cryFrequencyMin: 'תדר בכי מינימלי (Hz)',
+            cryFrequencyMax: 'תדר בכי מקסימלי (Hz)',
+            cryDurationMin: 'משך בכי מינימלי (שניות)',
+            cryIntensityThreshold: 'סף עוצמת בכי',
+            cryResponseTimeout: 'זמן תגובה מקסימלי (שניות)',
+
+            // Violence thresholds
+            violenceEnergyThreshold: 'סף אנרגיית צעקה',
+            violenceAggressionThreshold: 'סף תוקפנות',
+            violenceThreatConfidence: 'ביטחון באיום',
+            violenceFrequencyThreshold: 'סף תדר (Hz)',
+            violenceDurationMin: 'משך מינימלי (שניות)',
+
+            // Emotion thresholds
+            emotionConfidenceThreshold: 'סף ביטחון',
+            emotionAngerThreshold: 'סף כעס',
+            emotionFearThreshold: 'סף פחד',
+            emotionSadnessThreshold: 'סף עצב',
+            emotionDistressThreshold: 'סף מצוקה',
+
+            // Neglect thresholds
+            neglectSilenceDuration: 'משך שתיקה (שניות)',
+            neglectCryResponseTime: 'זמן תגובה לבכי (שניות)',
+            neglectInteractionGap: 'פער אינטראקציה (שניות)',
+            neglectMinInteractions: 'מינימום אינטראקציות/שעה',
+            neglectConfidence: 'סף ביטחון',
+
+            // Audio thresholds
+            audioNoiseFloor: 'רצפת רעש (dB)',
+            audioSampleRate: 'קצב דגימה (Hz)',
+            audioWindowSize: 'גודל חלון (שניות)',
+            audioCalibrationDuration: 'משך כיול (שניות)',
+            audioMinSegmentLength: 'אורך מקטע מינימלי (שניות)',
+
+            // Audit Log
+            auditLog: 'יומן ביקורת',
+            timestamp: 'חותמת זמן',
+            action: 'פעולה',
+            resource: 'משאב',
+            ipAddress: 'כתובת IP',
+            noAuditEntries: 'לא נמצאו רשומות ביומן הביקורת',
+            loadMore: 'טען עוד',
+            loading: 'טוען...',
+        }
+    };
+
+    /* ========================================
+       Admin State
+       ======================================== */
+    function adminState() {
+        return {
+            // UI state
+            lang: 'en',
+            dir: 'ltr',
+            darkMode: false,
+            toasts: [],
+            toastId: 0,
+
+            // System Health
+            health: {},
+            healthLoading: true,
+
+            // Database Stats
+            stats: {},
+            statsLoading: true,
+            cleanupDays: 30,
+            cleanupRunning: false,
+
+            // Detection Thresholds
+            thresholdGroups: {},
+            thresholdsLoading: true,
+            thresholdsSaving: false,
+
+            // Audit Log
+            auditEntries: [],
+            auditLoading: true,
+            auditOffset: 0,
+            auditLimit: 20,
+            auditHasMore: false,
+
+            /* ---------- Lifecycle ---------- */
+            init() {
+                // Restore preferences
+                const savedDark = localStorage.getItem('ss-dark-mode');
+                if (savedDark !== null) {
+                    this.darkMode = savedDark === 'true';
+                } else {
+                    this.darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                }
+                const savedLang = localStorage.getItem('ss-lang');
+                if (savedLang) {
+                    this.lang = savedLang;
+                    this.dir = savedLang === 'he' ? 'rtl' : 'ltr';
+                }
+
+                this.$watch('darkMode', (val) => localStorage.setItem('ss-dark-mode', val));
+                this.$watch('lang', (val) => localStorage.setItem('ss-lang', val));
+
+                // Load all data
+                this.loadHealth();
+                this.loadStats();
+                this.loadThresholds();
+                this.loadAuditLog(true);
+            },
+
+            /* ---------- Translation ---------- */
+            t(key) {
+                return translations[this.lang]?.[key] || translations['en'][key] || key;
+            },
+
+            toggleLang() {
+                if (this.lang === 'en') {
+                    this.lang = 'he';
+                    this.dir = 'rtl';
+                } else {
+                    this.lang = 'en';
+                    this.dir = 'ltr';
+                }
+            },
+
+            /* ---------- Toast ---------- */
+            showToast(message, type = 'info') {
+                const id = ++this.toastId;
+                this.toasts.push({ id, message, type, visible: true });
+                setTimeout(() => {
+                    const toast = this.toasts.find(t => t.id === id);
+                    if (toast) toast.visible = false;
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 300);
+                }, 4000);
+            },
+
+            /* ---------- System Health ---------- */
+            async loadHealth() {
+                this.healthLoading = true;
+                try {
+                    const res = await fetch('/api/v1/health');
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    this.health = await res.json();
+                    if (!this.health.status) this.health.status = 'healthy';
+                } catch (e) {
+                    console.error('Failed to load health:', e);
+                    this.health = { status: 'error' };
+                    this.showToast(e.message, 'error');
+                } finally {
+                    this.healthLoading = false;
+                }
+            },
+
+            /* ---------- Database Stats ---------- */
+            async loadStats() {
+                this.statsLoading = true;
+                try {
+                    const res = await fetch('/api/v1/stats');
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    this.stats = await res.json();
+                } catch (e) {
+                    console.error('Failed to load stats:', e);
+                    this.stats = {};
+                    this.showToast(e.message, 'error');
+                } finally {
+                    this.statsLoading = false;
+                }
+            },
+
+            async runCleanup() {
+                this.cleanupRunning = true;
+                try {
+                    const res = await fetch('/api/v1/cleanup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ retention_days: this.cleanupDays })
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    this.showToast(this.t('cleanupSuccess'), 'success');
+                    // Reload stats after cleanup
+                    this.loadStats();
+                } catch (e) {
+                    console.error('Cleanup failed:', e);
+                    this.showToast(this.t('cleanupError') + ': ' + e.message, 'error');
+                } finally {
+                    this.cleanupRunning = false;
+                }
+            },
+
+            /* ---------- Detection Thresholds ---------- */
+            buildDefaultThresholdGroups(data) {
+                // Build groups from API response, or use sensible defaults
+                const groups = {
+                    cry: {
+                        labelKey: 'cryDetector',
+                        color: 'bg-blue-500',
+                        open: false,
+                        thresholds: [
+                            { key: 'cry_energy_threshold', labelKey: 'cryEnergyThreshold', value: data?.cry_energy_threshold ?? 0.6, min: 0, max: 1, step: 0.01 },
+                            { key: 'cry_frequency_min', labelKey: 'cryFrequencyMin', value: data?.cry_frequency_min ?? 250, min: 100, max: 1000, step: 10 },
+                            { key: 'cry_frequency_max', labelKey: 'cryFrequencyMax', value: data?.cry_frequency_max ?? 600, min: 300, max: 2000, step: 10 },
+                            { key: 'cry_duration_min', labelKey: 'cryDurationMin', value: data?.cry_duration_min ?? 0.5, min: 0.1, max: 5, step: 0.1 },
+                            { key: 'cry_intensity_threshold', labelKey: 'cryIntensityThreshold', value: data?.cry_intensity_threshold ?? 0.5, min: 0, max: 1, step: 0.01 },
+                            { key: 'cry_response_timeout', labelKey: 'cryResponseTimeout', value: data?.cry_response_timeout ?? 30, min: 5, max: 120, step: 5 },
+                        ]
+                    },
+                    violence: {
+                        labelKey: 'violenceDetector',
+                        color: 'bg-red-500',
+                        open: false,
+                        thresholds: [
+                            { key: 'violence_energy_threshold', labelKey: 'violenceEnergyThreshold', value: data?.violence_energy_threshold ?? 0.7, min: 0, max: 1, step: 0.01 },
+                            { key: 'violence_aggression_threshold', labelKey: 'violenceAggressionThreshold', value: data?.violence_aggression_threshold ?? 0.6, min: 0, max: 1, step: 0.01 },
+                            { key: 'violence_threat_confidence', labelKey: 'violenceThreatConfidence', value: data?.violence_threat_confidence ?? 0.5, min: 0, max: 1, step: 0.01 },
+                            { key: 'violence_frequency_threshold', labelKey: 'violenceFrequencyThreshold', value: data?.violence_frequency_threshold ?? 300, min: 100, max: 1000, step: 10 },
+                            { key: 'violence_duration_min', labelKey: 'violenceDurationMin', value: data?.violence_duration_min ?? 0.3, min: 0.1, max: 5, step: 0.1 },
+                        ]
+                    },
+                    emotion: {
+                        labelKey: 'emotionDetector',
+                        color: 'bg-orange-500',
+                        open: false,
+                        thresholds: [
+                            { key: 'emotion_confidence_threshold', labelKey: 'emotionConfidenceThreshold', value: data?.emotion_confidence_threshold ?? 0.5, min: 0, max: 1, step: 0.01 },
+                            { key: 'emotion_anger_threshold', labelKey: 'emotionAngerThreshold', value: data?.emotion_anger_threshold ?? 0.6, min: 0, max: 1, step: 0.01 },
+                            { key: 'emotion_fear_threshold', labelKey: 'emotionFearThreshold', value: data?.emotion_fear_threshold ?? 0.5, min: 0, max: 1, step: 0.01 },
+                            { key: 'emotion_sadness_threshold', labelKey: 'emotionSadnessThreshold', value: data?.emotion_sadness_threshold ?? 0.5, min: 0, max: 1, step: 0.01 },
+                            { key: 'emotion_distress_threshold', labelKey: 'emotionDistressThreshold', value: data?.emotion_distress_threshold ?? 0.6, min: 0, max: 1, step: 0.01 },
+                        ]
+                    },
+                    neglect: {
+                        labelKey: 'neglectDetector',
+                        color: 'bg-gray-500',
+                        open: false,
+                        thresholds: [
+                            { key: 'neglect_silence_duration', labelKey: 'neglectSilenceDuration', value: data?.neglect_silence_duration ?? 60, min: 10, max: 300, step: 5 },
+                            { key: 'neglect_cry_response_time', labelKey: 'neglectCryResponseTime', value: data?.neglect_cry_response_time ?? 30, min: 5, max: 120, step: 5 },
+                            { key: 'neglect_interaction_gap', labelKey: 'neglectInteractionGap', value: data?.neglect_interaction_gap ?? 120, min: 30, max: 600, step: 10 },
+                            { key: 'neglect_min_interactions', labelKey: 'neglectMinInteractions', value: data?.neglect_min_interactions ?? 6, min: 1, max: 30, step: 1 },
+                            { key: 'neglect_confidence', labelKey: 'neglectConfidence', value: data?.neglect_confidence ?? 0.5, min: 0, max: 1, step: 0.01 },
+                        ]
+                    },
+                    audio: {
+                        labelKey: 'audioAnalyzer',
+                        color: 'bg-purple-500',
+                        open: false,
+                        thresholds: [
+                            { key: 'audio_noise_floor', labelKey: 'audioNoiseFloor', value: data?.audio_noise_floor ?? -40, min: -80, max: 0, step: 1 },
+                            { key: 'audio_sample_rate', labelKey: 'audioSampleRate', value: data?.audio_sample_rate ?? 16000, min: 8000, max: 48000, step: 1000 },
+                            { key: 'audio_window_size', labelKey: 'audioWindowSize', value: data?.audio_window_size ?? 3, min: 1, max: 15, step: 0.5 },
+                            { key: 'audio_calibration_duration', labelKey: 'audioCalibrationDuration', value: data?.audio_calibration_duration ?? 30, min: 5, max: 120, step: 5 },
+                            { key: 'audio_min_segment_length', labelKey: 'audioMinSegmentLength', value: data?.audio_min_segment_length ?? 0.5, min: 0.1, max: 5, step: 0.1 },
+                        ]
+                    }
+                };
+                return groups;
+            },
+
+            async loadThresholds() {
+                this.thresholdsLoading = true;
+                try {
+                    const res = await fetch('/api/v1/config/thresholds');
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    // Preserve open states if groups already exist
+                    const openStates = {};
+                    if (this.thresholdGroups) {
+                        for (const [k, v] of Object.entries(this.thresholdGroups)) {
+                            openStates[k] = v.open;
+                        }
+                    }
+                    this.thresholdGroups = this.buildDefaultThresholdGroups(data);
+                    // Restore open states
+                    for (const [k, wasOpen] of Object.entries(openStates)) {
+                        if (this.thresholdGroups[k]) {
+                            this.thresholdGroups[k].open = wasOpen;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to load thresholds:', e);
+                    // Build with defaults on error
+                    this.thresholdGroups = this.buildDefaultThresholdGroups({});
+                } finally {
+                    this.thresholdsLoading = false;
+                }
+            },
+
+            async saveGroupThresholds(groupKey) {
+                this.thresholdsSaving = true;
+                try {
+                    const group = this.thresholdGroups[groupKey];
+                    if (!group) return;
+                    const payload = {};
+                    for (const th of group.thresholds) {
+                        payload[th.key] = th.value;
+                    }
+                    const res = await fetch('/api/v1/config/thresholds', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    this.showToast(this.t('saveSuccess'), 'success');
+                } catch (e) {
+                    console.error('Failed to save thresholds:', e);
+                    this.showToast(this.t('saveError') + ': ' + e.message, 'error');
+                } finally {
+                    this.thresholdsSaving = false;
+                }
+            },
+
+            async resetAllThresholds() {
+                if (!confirm(this.lang === 'he' ? 'האם לאפס את כל הספים לברירת מחדל?' : 'Reset all thresholds to defaults?')) return;
+                this.thresholdsSaving = true;
+                try {
+                    const res = await fetch('/api/v1/config/thresholds/reset', {
+                        method: 'POST'
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    this.showToast(this.t('resetSuccess'), 'success');
+                    // Reload thresholds
+                    await this.loadThresholds();
+                } catch (e) {
+                    console.error('Failed to reset thresholds:', e);
+                    this.showToast(this.t('resetError') + ': ' + e.message, 'error');
+                } finally {
+                    this.thresholdsSaving = false;
+                }
+            },
+
+            /* ---------- Audit Log ---------- */
+            async loadAuditLog(reset = false) {
+                this.auditLoading = true;
+                if (reset) {
+                    this.auditOffset = 0;
+                    this.auditEntries = [];
+                }
+                try {
+                    const res = await fetch(`/api/v1/audit-log?limit=${this.auditLimit}&offset=${this.auditOffset}`);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    const entries = data.entries || data || [];
+                    if (reset) {
+                        this.auditEntries = entries;
+                    } else {
+                        this.auditEntries = [...this.auditEntries, ...entries];
+                    }
+                    this.auditHasMore = entries.length >= this.auditLimit;
+                } catch (e) {
+                    console.error('Failed to load audit log:', e);
+                    if (reset) this.auditEntries = [];
+                    this.auditHasMore = false;
+                } finally {
+                    this.auditLoading = false;
+                }
+            },
+
+            loadMoreAudit() {
+                this.auditOffset += this.auditLimit;
+                this.loadAuditLog(false);
+            },
+
+            /* ---------- Helpers ---------- */
+            formatTimestamp(ts) {
+                if (!ts) return 'N/A';
+                try {
+                    const d = new Date(ts);
+                    return d.toLocaleString(this.lang === 'he' ? 'he-IL' : 'en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    });
+                } catch {
+                    return ts;
+                }
+            },
+
+            actionBadgeClass(action) {
+                if (!action) return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                const a = action.toLowerCase();
+                if (a.includes('create') || a.includes('upload') || a.includes('analyze'))
+                    return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+                if (a.includes('delete') || a.includes('cleanup') || a.includes('remove'))
+                    return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+                if (a.includes('update') || a.includes('save') || a.includes('config'))
+                    return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+                if (a.includes('reset'))
+                    return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+                return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+            }
+        };
+    }
+    </script>
+</body>
+</html>

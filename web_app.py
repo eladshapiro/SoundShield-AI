@@ -5,16 +5,20 @@ Web Application for Kindergarten Recording Analyzer
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, Response
 from flask_cors import CORS
 import os
+import sys
 import json
 import time
 import shutil
 import platform
 import queue
+from dataclasses import asdict, fields
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from werkzeug.utils import secure_filename
 from main import KindergartenRecordingAnalyzer
-from config import config
+from config import (config, AudioAnalyzerConfig, CryDetectorConfig,
+                     ViolenceDetectorConfig, EmotionDetectorConfig,
+                     NeglectDetectorConfig)
 from api_errors import register_error_handlers, APIError
 from audit_logger import AuditLogger
 
@@ -320,6 +324,11 @@ def allowed_file(filename):
 def index():
     """Main page"""
     return render_template('index.html')
+
+@app.route('/admin')
+def admin_dashboard():
+    """Admin dashboard for system monitoring and threshold tuning."""
+    return render_template('admin.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -960,6 +969,214 @@ def api_cleanup():
     audit.log('data_cleanup', details={'deleted_count': deleted,
                                         'retention_days': days or config.database.retention_days})
     return jsonify({'success': True, 'deleted': deleted})
+
+
+# --- Threshold configuration endpoints ---
+
+# Mapping of detector names to config attributes
+_DETECTOR_CONFIG_MAP = {
+    'audio': 'audio',
+    'cry': 'cry',
+    'violence': 'violence',
+    'emotion': 'emotion',
+    'neglect': 'neglect',
+}
+
+# Mapping of detector names to their default factory classes
+_DETECTOR_DEFAULT_FACTORY = {
+    'audio': AudioAnalyzerConfig,
+    'cry': CryDetectorConfig,
+    'violence': ViolenceDetectorConfig,
+    'emotion': EmotionDetectorConfig,
+    'neglect': NeglectDetectorConfig,
+}
+
+
+def _serialize_config(cfg_obj):
+    """Convert a dataclass config to a JSON-safe dict.
+
+    Tuples are converted to lists so json.dumps does not choke.
+    """
+    d = asdict(cfg_obj)
+    for k, v in d.items():
+        if isinstance(v, tuple):
+            d[k] = list(v)
+    return d
+
+
+@app.route('/api/v1/config/thresholds')
+def api_get_thresholds():
+    """Return all detector thresholds grouped by detector name."""
+    data = {}
+    for name, attr in _DETECTOR_CONFIG_MAP.items():
+        data[name] = _serialize_config(getattr(config, attr))
+    return jsonify({'data': data})
+
+
+@app.route('/api/v1/config/thresholds', methods=['PUT'])
+def api_update_threshold():
+    """Update a single detector threshold value.
+
+    Expects JSON body: {"detector": "cry", "key": "energy_threshold", "value": 0.1}
+    """
+    if not request.is_json:
+        raise APIError('INVALID_CONTENT_TYPE',
+                        'Request must be JSON with Content-Type application/json.', 400)
+
+    body = request.get_json()
+
+    # --- Validate required fields ---
+    detector = body.get('detector')
+    key = body.get('key')
+    value = body.get('value')
+
+    missing = [f for f in ('detector', 'key', 'value') if body.get(f) is None]
+    if missing:
+        raise APIError('MISSING_FIELDS',
+                        f'Missing required fields: {", ".join(missing)}', 400)
+
+    # --- Validate detector name ---
+    if detector not in _DETECTOR_CONFIG_MAP:
+        raise APIError('INVALID_DETECTOR',
+                        f'Unknown detector: {detector}. '
+                        f'Valid detectors: {", ".join(sorted(_DETECTOR_CONFIG_MAP))}',
+                        400)
+
+    cfg_obj = getattr(config, _DETECTOR_CONFIG_MAP[detector])
+
+    # --- Validate key exists on the dataclass ---
+    valid_keys = {f.name for f in fields(cfg_obj)}
+    if key not in valid_keys:
+        raise APIError('INVALID_KEY',
+                        f'Unknown key "{key}" for detector "{detector}". '
+                        f'Valid keys: {", ".join(sorted(valid_keys))}',
+                        400)
+
+    # --- Validate and coerce value type ---
+    current_value = getattr(cfg_obj, key)
+    try:
+        if isinstance(current_value, float):
+            coerced = float(value)
+        elif isinstance(current_value, int):
+            coerced = int(value)
+        elif isinstance(current_value, tuple):
+            if not isinstance(value, (list, tuple)) or len(value) != len(current_value):
+                raise APIError('INVALID_VALUE',
+                                f'Key "{key}" expects a list of {len(current_value)} numbers.',
+                                400)
+            coerced = tuple(type(current_value[i])(value[i])
+                            for i in range(len(current_value)))
+        else:
+            coerced = value
+    except (TypeError, ValueError) as exc:
+        raise APIError('INVALID_VALUE',
+                        f'Cannot coerce value for "{key}": {exc}', 400)
+
+    old_value = current_value
+    setattr(cfg_obj, key, coerced)
+
+    # Audit-log the change
+    audit.log('threshold_update',
+              resource_type='config',
+              resource_id=f'{detector}.{key}',
+              user_ip=request.remote_addr,
+              details={'detector': detector, 'key': key,
+                       'old_value': old_value if not isinstance(old_value, tuple) else list(old_value),
+                       'new_value': coerced if not isinstance(coerced, tuple) else list(coerced)})
+
+    return jsonify({
+        'data': {
+            'detector': detector,
+            'config': _serialize_config(cfg_obj),
+        },
+        'message': f'{detector}.{key} updated from {old_value} to {coerced}',
+    })
+
+
+@app.route('/api/v1/config/thresholds/reset', methods=['POST'])
+def api_reset_thresholds():
+    """Reset all detector thresholds to their default values."""
+    for name, attr in _DETECTOR_CONFIG_MAP.items():
+        default_cfg = _DETECTOR_DEFAULT_FACTORY[name]()
+        setattr(config, attr, default_cfg)
+
+    audit.log('threshold_reset',
+              resource_type='config',
+              resource_id='all',
+              user_ip=request.remote_addr,
+              details={'detectors': sorted(_DETECTOR_CONFIG_MAP.keys())})
+
+    data = {}
+    for name, attr in _DETECTOR_CONFIG_MAP.items():
+        data[name] = _serialize_config(getattr(config, attr))
+
+    return jsonify({
+        'data': data,
+        'message': 'All detector thresholds reset to defaults.',
+    })
+
+
+@app.route('/api/v1/system/info')
+def api_system_info():
+    """Return system information: Python version, platform, package
+    availability, disk usage, and database statistics."""
+
+    # --- Python / OS ---
+    info = {
+        'python_version': sys.version,
+        'platform': platform.platform(),
+        'architecture': platform.machine(),
+    }
+
+    # --- ML package availability ---
+    packages = {}
+    for pkg in ('torch', 'whisper', 'transformers', 'librosa', 'tensorflow'):
+        try:
+            mod = __import__(pkg)
+            packages[pkg] = {'available': True,
+                             'version': getattr(mod, '__version__', 'unknown')}
+        except ImportError:
+            packages[pkg] = {'available': False, 'version': None}
+    info['packages'] = packages
+
+    # --- Disk usage ---
+    try:
+        total, used, free = shutil.disk_usage('/')
+        info['disk'] = {
+            'total_gb': round(total / (1024 ** 3), 2),
+            'used_gb': round(used / (1024 ** 3), 2),
+            'free_gb': round(free / (1024 ** 3), 2),
+            'usage_percent': round(used / total * 100, 1),
+        }
+    except OSError:
+        info['disk'] = None
+
+    # --- Upload folder size ---
+    try:
+        upload_size = sum(
+            os.path.getsize(os.path.join(UPLOAD_FOLDER, f))
+            for f in os.listdir(UPLOAD_FOLDER)
+            if os.path.isfile(os.path.join(UPLOAD_FOLDER, f))
+        )
+        info['uploads'] = {
+            'folder': UPLOAD_FOLDER,
+            'size_mb': round(upload_size / (1024 ** 2), 2),
+            'file_count': len([f for f in os.listdir(UPLOAD_FOLDER)
+                               if os.path.isfile(os.path.join(UPLOAD_FOLDER, f))]),
+        }
+    except OSError:
+        info['uploads'] = None
+
+    # --- Database stats ---
+    if db:
+        try:
+            info['database'] = db.get_stats()
+        except Exception:
+            info['database'] = None
+    else:
+        info['database'] = None
+
+    return jsonify({'data': info})
 
 
 def create_html_template():
