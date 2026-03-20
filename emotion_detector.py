@@ -339,6 +339,76 @@ class EmotionDetector:
         
         return concerning_segments
     
+    def merge_with_advanced_results(self, heuristic_results: List[Dict],
+                                     advanced_results: List[Dict]) -> List[Dict]:
+        """Merge heuristic emotion results with HuBERT advanced results.
+
+        HuBERT confidence > 0.7 -> trust HuBERT
+        HuBERT confidence < 0.5 -> weighted average of both
+        Between 0.5-0.7 -> prefer HuBERT but blend confidence
+
+        Returns unified format expected by report_generator.py.
+        """
+        if not advanced_results:
+            for r in heuristic_results:
+                r['ml_backed'] = False
+            return heuristic_results
+
+        if not heuristic_results:
+            return advanced_results
+
+        # Index advanced results by time range for matching
+        merged = []
+        used_advanced = set()
+
+        for h in heuristic_results:
+            h_start = h.get('start_time', 0)
+            h_end = h.get('end_time', 0)
+
+            # Find overlapping advanced result
+            best_match = None
+            best_overlap = 0
+            for j, a in enumerate(advanced_results):
+                a_start = a.get('start_time', 0)
+                a_end = a.get('end_time', 0)
+                overlap = max(0, min(h_end, a_end) - max(h_start, a_start))
+                if overlap > best_overlap:
+                    best_overlap = overlap
+                    best_match = (j, a)
+
+            if best_match:
+                j, a = best_match
+                used_advanced.add(j)
+                adv_conf = a.get('confidence', 0)
+
+                if adv_conf > 0.7:
+                    # Trust HuBERT completely
+                    merged.append(a)
+                elif adv_conf < 0.5:
+                    # Weighted average - prefer heuristic slightly
+                    blended_conf = 0.4 * adv_conf + 0.6 * h.get('confidence', 0)
+                    result = dict(h)
+                    result['confidence'] = blended_conf
+                    result['ml_backed'] = False
+                    merged.append(result)
+                else:
+                    # Blend: prefer HuBERT emotion but adjust confidence
+                    blended_conf = 0.6 * adv_conf + 0.4 * h.get('confidence', 0)
+                    result = dict(a)
+                    result['confidence'] = blended_conf
+                    merged.append(result)
+            else:
+                h_copy = dict(h)
+                h_copy['ml_backed'] = False
+                merged.append(h_copy)
+
+        # Add any advanced results that didn't match heuristic ones
+        for j, a in enumerate(advanced_results):
+            if j not in used_advanced:
+                merged.append(a)
+
+        return merged
+
     def _calculate_severity(self, emotion: str, confidence: float) -> str:
         """
         Calculate severity level for detected emotion

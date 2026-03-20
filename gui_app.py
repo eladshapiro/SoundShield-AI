@@ -12,6 +12,17 @@ from typing import Dict, Optional
 import warnings
 warnings.filterwarnings('ignore')
 
+# Matplotlib for embedded charts
+try:
+    import matplotlib
+    matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
 # Fix encoding for Windows console (only if not in GUI mode)
 if sys.platform == 'win32' and not hasattr(sys, 'ps1'):
     try:
@@ -363,24 +374,28 @@ class ModernGUI:
                                        anchor=tk.E)
         self.progress_label.pack(fill=tk.X)
         
-        # Results section
+        # Results section with tabs
         results_frame = tk.Frame(main_frame, bg='white', relief=tk.RAISED, bd=1)
         results_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         results_inner = tk.Frame(results_frame, bg='white', padx=30, pady=20)
         results_inner.pack(fill=tk.BOTH, expand=True)
-        
+
         self.results_label_header = ttk.Label(results_inner,
                  text=f"📋 {self.t('results')}",
                  style='Header.TLabel',
                  background='white')
         self.results_label_header.pack(anchor=tk.W, pady=(0, 15))
-        
-        # Results text area with scrollbar
-        results_container = tk.Frame(results_inner, bg='white')
-        results_container.pack(fill=tk.BOTH, expand=True)
-        
-        self.results_text = scrolledtext.ScrolledText(results_container,
+
+        # Tabbed notebook for Summary | Charts | Details
+        self.results_notebook = ttk.Notebook(results_inner)
+        self.results_notebook.pack(fill=tk.BOTH, expand=True)
+
+        # Tab 1: Summary
+        summary_tab = tk.Frame(self.results_notebook, bg='white')
+        self.results_notebook.add(summary_tab, text='Summary')
+
+        self.results_text = scrolledtext.ScrolledText(summary_tab,
                                                       wrap=tk.WORD,
                                                       font=('Segoe UI', 10),
                                                       bg='#fafafa',
@@ -390,7 +405,27 @@ class ModernGUI:
                                                       pady=15,
                                                       state=tk.DISABLED)
         self.results_text.pack(fill=tk.BOTH, expand=True)
-        
+
+        # Tab 2: Charts
+        self.charts_tab = tk.Frame(self.results_notebook, bg='white')
+        self.results_notebook.add(self.charts_tab, text='Charts')
+        self.chart_canvas_widget = None
+
+        # Tab 3: Details
+        details_tab = tk.Frame(self.results_notebook, bg='white')
+        self.results_notebook.add(details_tab, text='Details')
+
+        self.details_text = scrolledtext.ScrolledText(details_tab,
+                                                       wrap=tk.WORD,
+                                                       font=('Segoe UI', 10),
+                                                       bg='#fafafa',
+                                                       fg='#2c3e50',
+                                                       relief=tk.FLAT,
+                                                       padx=15,
+                                                       pady=15,
+                                                       state=tk.DISABLED)
+        self.details_text.pack(fill=tk.BOTH, expand=True)
+
         # Initial message
         self.update_welcome_message()
     
@@ -605,27 +640,51 @@ class ModernGUI:
             self.root.after(0, lambda: self.select_btn.config(state=tk.NORMAL))
     
     def display_results(self, results: Dict):
-        """Display analysis results in the results text area"""
+        """Display analysis results in all tabs"""
         report = results.get('report', {})
         summary = report.get('summary', {})
         stats = report.get('statistics', {})
-        
-        # Clear and enable text widget
+
+        # Tab 1: Summary
         self.results_text.config(state=tk.NORMAL)
         self.results_text.delete(1.0, tk.END)
-        
-        # Build results text based on language
+
         if self.language == 'he':
             results_text = self._build_results_hebrew(results, report, summary, stats)
         else:
             results_text = self._build_results_english(results, report, summary, stats)
-        
-        # Insert text
+
         self.results_text.insert(1.0, results_text)
         self.results_text.config(state=tk.DISABLED)
-        
-        # Scroll to top
         self.results_text.see(1.0)
+
+        # Tab 2: Charts
+        self._render_charts(results)
+
+        # Tab 3: Details - detailed findings text
+        self.details_text.config(state=tk.NORMAL)
+        self.details_text.delete(1.0, tk.END)
+        detailed = report.get('detailed_findings', {})
+        detail_lines = []
+        for category, items in detailed.items():
+            if isinstance(items, list) and items:
+                detail_lines.append(f"\n{'='*60}")
+                detail_lines.append(f"  {category.upper().replace('_', ' ')}")
+                detail_lines.append(f"{'='*60}")
+                for item in items[:50]:
+                    if isinstance(item, dict):
+                        ts = item.get('timestamp', '')
+                        desc = item.get('description', item.get('detected_emotion', ''))
+                        sev = item.get('severity', '')
+                        detail_lines.append(f"  [{ts}] {desc} ({sev})")
+        if detail_lines:
+            self.details_text.insert(1.0, '\n'.join(detail_lines))
+        else:
+            self.details_text.insert(1.0, 'No detailed findings to display.')
+        self.details_text.config(state=tk.DISABLED)
+
+        # Switch to Summary tab
+        self.results_notebook.select(0)
     
     def _build_results_english(self, results: Dict, report: Dict, summary: Dict, stats: Dict) -> str:
         """Build results text in English"""
@@ -841,6 +900,56 @@ class ModernGUI:
         
         return results_text
     
+    def _render_charts(self, results: Dict):
+        """Render matplotlib charts in the Charts tab."""
+        if not MATPLOTLIB_AVAILABLE:
+            label = tk.Label(self.charts_tab, text="matplotlib not available for charts",
+                             bg='white', fg='#7f8c8d')
+            label.pack(pady=20)
+            return
+
+        # Clear previous charts
+        if self.chart_canvas_widget:
+            self.chart_canvas_widget.get_tk_widget().destroy()
+
+        report = results.get('report', {})
+        stats = report.get('statistics', {})
+        severity_dist = stats.get('severity_distribution', {'low': 0, 'medium': 0, 'high': 0, 'critical': 0})
+        incident_types = stats.get('incident_types', {})
+        timeline = stats.get('timeline_density', {})
+
+        fig = Figure(figsize=(10, 5), dpi=80, facecolor='white')
+
+        # Subplot 1: Severity pie chart
+        ax1 = fig.add_subplot(1, 2, 1)
+        labels = ['Low', 'Medium', 'High', 'Critical']
+        sizes = [severity_dist.get('low', 0), severity_dist.get('medium', 0),
+                 severity_dist.get('high', 0), severity_dist.get('critical', 0)]
+        colors = ['#22c55e', '#eab308', '#f97316', '#ef4444']
+        non_zero = [(l, s, c) for l, s, c in zip(labels, sizes, colors) if s > 0]
+        if non_zero:
+            ax1.pie([x[1] for x in non_zero],
+                    labels=[x[0] for x in non_zero],
+                    colors=[x[2] for x in non_zero],
+                    autopct='%1.0f%%', startangle=90)
+        ax1.set_title('Severity Distribution')
+
+        # Subplot 2: Timeline scatter
+        ax2 = fig.add_subplot(1, 2, 2)
+        if timeline:
+            minutes = sorted([int(k) for k in timeline.keys()])
+            counts = [timeline.get(str(m), timeline.get(m, 0)) for m in minutes]
+            ax2.bar(minutes, counts, color='#2563eb', alpha=0.7)
+            ax2.set_xlabel('Time (minutes)')
+            ax2.set_ylabel('Incidents')
+        ax2.set_title('Incidents Over Time')
+
+        fig.tight_layout(pad=2.0)
+
+        self.chart_canvas_widget = FigureCanvasTkAgg(fig, master=self.charts_tab)
+        self.chart_canvas_widget.draw()
+        self.chart_canvas_widget.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
     def update_status(self, message: str):
         """Update status label (thread-safe)"""
         self.root.after(0, lambda: self.status_label.config(text=message))

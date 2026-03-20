@@ -63,6 +63,15 @@ except ImportError:
     LANGUAGE_DETECTOR_AVAILABLE = False
     logger.warning("Inappropriate language detector not available (optional)")
 
+# Import speaker diarizer
+try:
+    from speaker_diarizer import SpeakerDiarizer
+    DIARIZER_AVAILABLE = True
+    logger.info("Speaker diarizer available")
+except ImportError:
+    DIARIZER_AVAILABLE = False
+    logger.warning("Speaker diarizer not available (optional)")
+
 # Constants
 SUPPORTED_LANGUAGES = ['en', 'he']
 SUPPORTED_FORMATS = ['.wav', '.mp3', '.m4a', '.flac', '.aac', '.ogg']
@@ -86,14 +95,15 @@ class AudioFileTooLongError(AudioAnalysisError):
 
 class KindergartenRecordingAnalyzer:
     """Main analyzer coordinating all detection modules.
-    
+
     This class orchestrates comprehensive analysis of kindergarten audio
     recordings to detect inappropriate staff behavior including emotional
     abuse, neglect, violence, and inappropriate language.
-    
+
     Args:
         language: Language code for analysis ('en' for English, 'he' for Hebrew)
-        
+        use_advanced: When True (default), eagerly loads ML models as primary detectors
+
     Attributes:
         language: The language used for analysis
         audio_analyzer: Basic audio analysis module
@@ -104,24 +114,25 @@ class KindergartenRecordingAnalyzer:
         advanced_analyzer: Advanced ML models (optional)
         language_detector: Inappropriate language detector (optional)
         report_generator: Report generation module
-        
+
     Example:
         >>> analyzer = KindergartenRecordingAnalyzer(language='en')
         >>> results = analyzer.run_complete_analysis('recording.wav')
         >>> print(results['report']['summary']['risk_level'])
     """
-    
-    def __init__(self, language: str = 'en'):
+
+    def __init__(self, language: str = 'en', use_advanced: bool = True):
         """Initialize the main analyzer application."""
         if language not in SUPPORTED_LANGUAGES:
             raise ValueError(
                 f"Unsupported language: {language}. "
                 f"Supported languages: {', '.join(SUPPORTED_LANGUAGES)}"
             )
-        
+
         self.language = language
-        logger.info(f"Initializing SoundShield-AI Analyzer (language: {language})")
-        
+        self.use_advanced = use_advanced
+        logger.info(f"Initializing SoundShield-AI Analyzer (language: {language}, use_advanced: {use_advanced})")
+
         try:
             # Initialize all analysis modules
             self.audio_analyzer = AudioAnalyzer()
@@ -134,10 +145,10 @@ class KindergartenRecordingAnalyzer:
         except Exception as e:
             logger.critical(f"Failed to initialize core modules: {e}")
             raise AudioAnalysisError(f"Initialization failed: {e}")
-        
-        # Initialize advanced analyzer if available
+
+        # Initialize advanced analyzer - eagerly loaded as default when use_advanced=True
         self.advanced_analyzer = None
-        if ADVANCED_MODELS_AVAILABLE:
+        if ADVANCED_MODELS_AVAILABLE and use_advanced:
             try:
                 self.advanced_analyzer = AdvancedAnalyzer(
                     use_whisper=True,
@@ -145,10 +156,22 @@ class KindergartenRecordingAnalyzer:
                 )
                 self.advanced_analyzer.load_models()
                 if self.advanced_analyzer.models_loaded:
-                    logger.info("Advanced models loaded successfully")
+                    logger.info(
+                        f"Advanced models loaded (whisper={self.advanced_analyzer.whisper_loaded}, "
+                        f"hubert={self.advanced_analyzer.hubert_loaded})"
+                    )
             except Exception as e:
                 logger.warning(f"Error loading advanced models: {e}")
-        
+
+        # Initialize speaker diarizer
+        self.speaker_diarizer = None
+        if DIARIZER_AVAILABLE and use_advanced:
+            try:
+                self.speaker_diarizer = SpeakerDiarizer()
+                logger.info("Speaker diarizer initialized")
+            except Exception as e:
+                logger.warning(f"Error initializing speaker diarizer: {e}")
+
         # Initialize inappropriate language detector
         self.language_detector = None
         if LANGUAGE_DETECTOR_AVAILABLE:
@@ -157,7 +180,7 @@ class KindergartenRecordingAnalyzer:
                 logger.info("Inappropriate language detector initialized")
             except Exception as e:
                 logger.warning(f"Error initializing language detector: {e}")
-        
+
         logger.info("All modules initialized successfully")
     
     def _validate_audio_file(self, file_path: str) -> None:
@@ -238,7 +261,7 @@ class KindergartenRecordingAnalyzer:
             # Step 1: Basic audio analysis
             update_progress("Basic audio analysis")
             audio_analysis = self.audio_analyzer.analyze_audio_file(file_path)
-            
+
             # Validate audio duration
             duration = audio_analysis.get('duration', 0)
             if duration < MIN_AUDIO_LENGTH_SECONDS:
@@ -251,17 +274,43 @@ class KindergartenRecordingAnalyzer:
                     f"Audio file too long: {duration:.1f}s "
                     f"(maximum: {MAX_AUDIO_LENGTH_SECONDS}s)"
                 )
-            
-            # Step 2: Emotion detection
+
+            # Step 2: Emotion detection (HuBERT primary, heuristic fallback)
             update_progress("Emotion detection")
-            emotion_results = self.emotion_detector.analyze_segment_emotions(
-                audio_analysis['segments'], 
+            heuristic_emotions = self.emotion_detector.analyze_segment_emotions(
+                audio_analysis['segments'],
                 audio_analysis['sample_rate']
             )
-            concerning_emotions = self.emotion_detector.detect_concerning_emotions(
-                emotion_results
+            heuristic_concerning = self.emotion_detector.detect_concerning_emotions(
+                heuristic_emotions
             )
-            
+
+            # Use HuBERT as PRIMARY when available, merge with heuristics
+            advanced_emotions = []
+            hubert_used = False
+            if (self.advanced_analyzer and
+                    hasattr(self.advanced_analyzer, 'hubert_loaded') and
+                    self.advanced_analyzer.hubert_loaded):
+                try:
+                    advanced_emotions = self.advanced_analyzer.detect_concerning_emotions_advanced(
+                        file_path
+                    )
+                    hubert_used = True
+                    logger.info(f"HuBERT detected {len(advanced_emotions)} concerning segments")
+                except Exception as e:
+                    logger.warning(f"HuBERT emotion detection failed, using heuristics: {e}")
+
+            if hubert_used and advanced_emotions:
+                concerning_emotions = self.emotion_detector.merge_with_advanced_results(
+                    heuristic_concerning, advanced_emotions
+                )
+            else:
+                concerning_emotions = heuristic_concerning
+                for e in concerning_emotions:
+                    e['ml_backed'] = False
+
+            emotion_results = heuristic_emotions
+
             # Step 3: Cry detection
             update_progress("Baby cry detection")
             audio, sr = self.audio_analyzer.load_audio(file_path)
@@ -269,18 +318,18 @@ class KindergartenRecordingAnalyzer:
             cry_with_responses = self.cry_detector.detect_response_to_cry(
                 audio, sr, cry_segments
             )
-            
+
             # Step 4: Violence detection
             update_progress("Violence detection")
             violence_segments = self.violence_detector.detect_violence_segments(audio, sr)
-            
+
             # Step 5: Neglect detection
             update_progress("Neglect detection")
             neglect_analysis = self.neglect_detector.detect_neglect_patterns(
                 audio, sr, cry_segments, violence_segments
             )
-            
-            # Step 6: Advanced analysis with ML models (if available)
+
+            # Step 6: Advanced analysis with ML models (Whisper + comprehensive)
             advanced_analysis = {}
             if self.advanced_analyzer and self.advanced_analyzer.models_loaded:
                 update_progress("Advanced ML analysis")
@@ -291,7 +340,18 @@ class KindergartenRecordingAnalyzer:
                     logger.info("Advanced analysis completed successfully")
                 except Exception as e:
                     logger.warning(f"Error in advanced analysis: {e}")
-            
+
+            # Speaker diarization (runs once, results available to all)
+            diarization_results = {}
+            if self.speaker_diarizer:
+                try:
+                    speaker_segments = self.speaker_diarizer.get_speaker_segments(file_path)
+                    diarization_results = self.speaker_diarizer.get_summary(speaker_segments)
+                    diarization_results['segments'] = speaker_segments
+                    logger.info(f"Diarization: {diarization_results.get('speaker_count', 0)} speakers detected")
+                except Exception as e:
+                    logger.warning(f"Speaker diarization failed: {e}")
+
             # Step 7: Inappropriate language detection
             inappropriate_language = {}
             if self.language_detector:
@@ -307,7 +367,16 @@ class KindergartenRecordingAnalyzer:
                         logger.info("No inappropriate language detected")
                 except Exception as e:
                     logger.warning(f"Error in language detection: {e}")
-            
+
+            # Track which models were used
+            models_used = []
+            if hubert_used:
+                models_used.append('hubert')
+            if self.advanced_analyzer and self.advanced_analyzer.whisper_loaded:
+                models_used.append('whisper')
+            if self.speaker_diarizer:
+                models_used.append('diarizer')
+
             # Compile results
             analysis_results = {
                 'file_path': file_path,
@@ -320,13 +389,15 @@ class KindergartenRecordingAnalyzer:
                 'violence_segments': violence_segments,
                 'neglect_analysis': neglect_analysis,
                 'advanced_analysis': advanced_analysis,
+                'diarization': diarization_results,
                 'inappropriate_language': inappropriate_language,
+                'models_used': models_used,
                 'analysis_timestamp': time.time(),
                 'language': language
             }
-            
+
             logger.info(f"Analysis completed successfully! Duration: {audio_analysis['duration']:.1f}s")
-            
+
             return analysis_results
             
         except Exception as e:

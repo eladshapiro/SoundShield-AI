@@ -1,846 +1,1701 @@
-
 <!DOCTYPE html>
-<html dir="rtl" lang="he">
+<html x-data="appState()" :lang="lang" :dir="dir" :class="{ 'dark': darkMode }">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מערכת ניתוח הקלטות גן ילדים</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+    <title x-text="t('pageTitle')">SoundShield-AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            primary: { 50: '#EFF6FF', 100: '#DBEAFE', 200: '#BFDBFE', 300: '#93C5FD', 400: '#60A5FA', 500: '#3B82F6', 600: '#2563EB', 700: '#1D4ED8', 800: '#1E40AF', 900: '#1E3A8A' },
+            severity: { low: '#22C55E', medium: '#EAB308', high: '#F97316', critical: '#EF4444' }
+          }
         }
-        
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f7fa;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px 0;
-            text-align: center;
-            margin-bottom: 30px;
-            border-radius: 10px;
-        }
-        
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            font-size: 1.2em;
-            opacity: 0.9;
-        }
-        
-        .upload-section {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-        }
-        
-        .upload-area {
-            border: 2px dashed #ddd;
-            border-radius: 10px;
-            padding: 40px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-        
-        .upload-area:hover {
-            border-color: #667eea;
-            background-color: #f8f9ff;
-        }
-        
-        .upload-area.dragover {
-            border-color: #667eea;
-            background-color: #f0f4ff;
-        }
-        
-        .upload-icon {
-            font-size: 3em;
-            color: #667eea;
-            margin-bottom: 20px;
-        }
-        
-        .file-input {
-            display: none;
-        }
-        
-        .upload-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 1.1em;
-            transition: all 0.3s ease;
-        }
-        
-        .upload-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .upload-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 20px;
-            background-color: #f0f0f0;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-top: 20px;
-            display: none;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-        
-        .results-section {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-            display: none;
-        }
-        
-        .results-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        
-        .result-card {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            border-left: 4px solid #667eea;
-        }
-        
-        .result-card h3 {
-            color: #667eea;
-            margin-bottom: 10px;
-        }
-        
-        .severity-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: bold;
-            margin-top: 10px;
-        }
-        
-        .severity-low { background-color: #d4edda; color: #155724; }
-        .severity-medium { background-color: #fff3cd; color: #856404; }
-        .severity-high { background-color: #f8d7da; color: #721c24; }
-        .severity-critical { background-color: #721c24; color: white; }
-        
-        .reports-section {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .reports-list {
-            margin-top: 20px;
-        }
-        
-        .report-item {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .report-actions {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-primary { background-color: #667eea; color: white; }
-        .btn-secondary { background-color: #6c757d; color: white; }
-        .btn-success { background-color: #28a745; color: white; }
-        
-        .btn:hover { opacity: 0.8; }
-        
-        .alert {
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-        }
-        
-        .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .alert-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        
-        .progress-message {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin: 20px 0;
-            text-align: center;
-            font-size: 1.1em;
-            color: #667eea;
-            font-weight: bold;
-            min-height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .progress-steps {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin: 20px 0;
-        }
-        
-        .step-indicator {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            margin: 5px 0;
-            border-radius: 5px;
-            transition: all 0.3s ease;
-        }
-        
-        .step-indicator.active {
-            background-color: #e8f4f8;
-            border-left: 4px solid #667eea;
-        }
-        
-        .step-indicator.completed {
-            background-color: #d4edda;
-            border-left: 4px solid #28a745;
-        }
-        
-        .step-number {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            background-color: #ddd;
-            color: #666;
-        }
-        
-        .step-indicator.active .step-number {
-            background-color: #667eea;
-            color: white;
-        }
-        
-        .step-indicator.completed .step-number {
-            background-color: #28a745;
-            color: white;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .language-selector {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .language-selector label {
-            font-weight: bold;
-            font-size: 1.1em;
-            color: #667eea;
-        }
-        
-        .language-selector select {
-            padding: 10px 20px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 1em;
-            background: white;
-            color: #333;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .language-selector select:hover {
-            border-color: #667eea;
-        }
-        
-        .language-selector select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        @media (max-width: 768px) {
-            .container { padding: 10px; }
-            .header h1 { font-size: 2em; }
-            .results-grid { grid-template-columns: 1fr; }
-            .report-item { flex-direction: column; gap: 10px; }
-            .language-selector { flex-direction: column; align-items: flex-start; }
-        }
-    </style>
+      }
+    }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>מערכת ניתוח הקלטות גן ילדים</h1>
-            <p>Kindergarten Recording Analyzer</p>
-        </div>
-        
-        <div class="language-selector">
-            <label for="languageSelect">🌐 שפת הניתוח / Analysis Language:</label>
-            <select id="languageSelect">
-                <option value="he">עברית (Hebrew)</option>
-                <option value="en">English (אנגלית)</option>
-            </select>
-        </div>
-        
-        <div class="upload-section">
-            <h2>העלאת קובץ אודיו</h2>
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">🎵</div>
-                <h3>גרור קובץ אודיו לכאן או לחץ לבחירה</h3>
-                <p>תומך בפורמטים: WAV, MP3, M4A, FLAC, AAC, OGG</p>
-                <input type="file" id="fileInput" class="file-input" accept=".wav,.mp3,.m4a,.flac,.aac,.ogg">
-                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                    בחר קובץ
-                </button>
+<body class="bg-[#F8FAFC] dark:bg-[#0F172A] font-sans text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
+
+    <!-- Skip to content -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-md" x-text="t('skipToContent')">
+        Skip to main content
+    </a>
+
+    <!-- ===== TOP NAVIGATION BAR ===== -->
+    <nav class="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo / Title -->
+                <div class="flex items-center gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
+                        <!-- Shield icon -->
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-gray-900 dark:text-white">SoundShield-AI</h1>
+                        <p class="text-xs text-gray-500 dark:text-gray-400" x-text="t('subtitle')"></p>
+                    </div>
+                </div>
+
+                <!-- Right controls -->
+                <div class="flex items-center gap-2">
+                    <!-- Sidebar toggle (mobile) -->
+                    <button
+                        @click="sidebarOpen = !sidebarOpen"
+                        class="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        :aria-label="t('toggleSidebar')"
+                    >
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                        </svg>
+                    </button>
+
+                    <!-- Language toggle -->
+                    <button
+                        x-on:click="toggleLang()"
+                        class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        :aria-label="t('toggleLanguage')"
+                    >
+                        <svg class="w-4 h-4 me-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                        </svg>
+                        <span x-text="lang === 'en' ? 'HE' : 'EN'"></span>
+                    </button>
+
+                    <!-- Dark mode toggle -->
+                    <button
+                        x-on:click="darkMode = !darkMode"
+                        class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        :aria-label="t('toggleDarkMode')"
+                    >
+                        <!-- Sun icon (shown in dark mode) -->
+                        <svg x-show="darkMode" class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
+                        </svg>
+                        <!-- Moon icon (shown in light mode) -->
+                        <svg x-show="!darkMode" class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clip-rule="evenodd"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div class="progress-bar" id="progressBar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
         </div>
-        
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <div class="progress-message" id="progressMessage">
-                מתחיל ניתוח... / Starting analysis...
+    </nav>
+
+    <!-- ===== MAIN LAYOUT ===== -->
+    <div class="max-w-screen-2xl mx-auto flex flex-col lg:flex-row min-h-[calc(100vh-4rem)]">
+
+        <!-- ===== LEFT SIDEBAR ===== -->
+        <!-- Mobile backdrop -->
+        <div
+            x-show="sidebarOpen"
+            x-transition:enter="transition-opacity ease-linear duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition-opacity ease-linear duration-300"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+            @click="sidebarOpen = false"
+        ></div>
+
+        <aside
+            :class="sidebarOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'"
+            class="fixed bottom-0 left-0 right-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-2xl lg:rounded-none
+                   lg:static lg:max-h-none lg:z-auto lg:w-80 lg:flex-shrink-0
+                   bg-white dark:bg-gray-900 border-t lg:border-t-0 lg:border-e border-gray-200 dark:border-gray-700
+                   transform transition-transform duration-300 ease-in-out"
+        >
+            <div class="p-4 lg:p-6 space-y-6 lg:sticky lg:top-16 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
+
+                <!-- Mobile drag handle -->
+                <div class="flex justify-center lg:hidden">
+                    <div class="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+                </div>
+
+                <!-- Upload Zone -->
+                <div x-data="uploadManager()">
+                    <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3" x-text="t('uploadTitle')"></h2>
+
+                    <div
+                        class="relative border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 cursor-pointer"
+                        :class="dragOver
+                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                            : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 hover:bg-gray-50 dark:hover:bg-gray-800'"
+                        @click="$refs.fileInput.click()"
+                        @dragover.prevent="dragOver = true"
+                        @dragleave.prevent="dragOver = false"
+                        @drop.prevent="handleDrop($event)"
+                        :aria-label="t('uploadDropzone')"
+                    >
+                        <input
+                            type="file"
+                            x-ref="fileInput"
+                            class="hidden"
+                            accept=".wav,.mp3,.m4a,.flac,.aac,.ogg"
+                            @change="handleFileSelect($event)"
+                        >
+
+                        <!-- Upload icon -->
+                        <div class="mx-auto w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-3">
+                            <svg class="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                        </div>
+
+                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300" x-text="t('uploadDragDrop')"></p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">WAV, MP3, M4A, FLAC, AAC, OGG</p>
+
+                        <!-- Selected file display -->
+                        <template x-if="selectedFile">
+                            <div class="mt-3 p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg text-sm" @click.stop>
+                                <div class="flex items-center gap-2 text-primary-700 dark:text-primary-300">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                                    </svg>
+                                    <span class="truncate" x-text="selectedFile.name"></span>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="formatFileSize(selectedFile.size)"></p>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Analysis language selector -->
+                    <div class="mt-3">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1" x-text="t('analysisLanguage')"></label>
+                        <select
+                            x-model="analysisLang"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none min-h-[44px]"
+                            :aria-label="t('analysisLanguage')"
+                        >
+                            <option value="he">Hebrew</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+
+                    <!-- Upload / Cancel buttons -->
+                    <div class="mt-3 flex gap-2">
+                        <button
+                            @click="uploadFile()"
+                            :disabled="!selectedFile || uploading"
+                            class="flex-1 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 px-4 rounded-lg transition-colors min-h-[44px] flex items-center justify-center gap-2"
+                            :aria-label="t('uploadButton')"
+                        >
+                            <svg x-show="!uploading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                            </svg>
+                            <svg x-show="uploading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span x-text="uploading ? t('analyzing') : t('uploadButton')"></span>
+                        </button>
+                        <button
+                            x-show="selectedFile && !uploading"
+                            @click="clearFile()"
+                            class="px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm transition-colors min-h-[44px]"
+                            :aria-label="t('cancelButton')"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Divider -->
+                <hr class="border-gray-200 dark:border-gray-700">
+
+                <!-- Analysis History -->
+                <div x-data="{ historyLoaded: false }" x-init="$nextTick(() => { loadHistory(); historyLoaded = true })">
+                    <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+                        <span x-text="t('historyTitle')"></span>
+                        <button
+                            @click="loadHistory()"
+                            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+                            :aria-label="t('refreshHistory')"
+                        >
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                        </button>
+                    </h2>
+
+                    <div class="space-y-2 max-h-[40vh] lg:max-h-[50vh] overflow-y-auto" id="historyList">
+                        <!-- Empty history message -->
+                        <template x-if="history.length === 0">
+                            <p class="text-sm text-gray-400 dark:text-gray-500 text-center py-4" x-text="t('noHistory')"></p>
+                        </template>
+
+                        <!-- History items -->
+                        <template x-for="(report, idx) in history" :key="report.filename">
+                            <button
+                                @click="viewReport(report.filename); sidebarOpen = false"
+                                class="w-full text-start p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group min-h-[44px]"
+                                :aria-label="t('viewReport') + ': ' + report.original_file"
+                            >
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" x-text="report.original_file"></p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="formatDate(report.date)"></p>
+                                    </div>
+                                    <span
+                                        class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full"
+                                        :class="severityBadgeClass(report.summary?.risk_level)"
+                                        x-text="report.summary?.risk_level || '---'"
+                                    ></span>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </div>
             </div>
-            <div class="progress-steps" id="progressSteps" style="display: none;">
-                <div class="step-indicator" id="step1">
-                    <div class="step-number">1</div>
-                    <span>ניתוח אודיו בסיסי / Basic audio analysis</span>
-                </div>
-                <div class="step-indicator" id="step2">
-                    <div class="step-number">2</div>
-                    <span>זיהוי רגשות / Emotion detection</span>
-                </div>
-                <div class="step-indicator" id="step3">
-                    <div class="step-number">3</div>
-                    <span>זיהוי בכי / Baby cry detection</span>
-                </div>
-                <div class="step-indicator" id="step4">
-                    <div class="step-number">4</div>
-                    <span>זיהוי אלימות / Violence detection</span>
-                </div>
-                <div class="step-indicator" id="step5">
-                    <div class="step-number">5</div>
-                    <span>זיהוי הזנחה / Neglect detection</span>
-                </div>
-                <div class="step-indicator" id="step6">
-                    <div class="step-number">6</div>
-                    <span>ניתוח מתקדם / Advanced analysis</span>
-                </div>
-                <div class="step-indicator" id="step7">
-                    <div class="step-number">7</div>
-                    <span>זיהוי שפה לא הולמת / Inappropriate language detection</span>
-                </div>
+        </aside>
+
+        <!-- ===== MAIN CONTENT AREA ===== -->
+        <main id="main-content" class="flex-1 overflow-y-auto">
+            <div class="p-4 sm:p-6 lg:p-8 space-y-6">
+
+                <!-- ===== EMPTY STATE (no analysis loaded) ===== -->
+                <template x-if="!currentResults && !analyzing">
+                    <div class="flex flex-col items-center justify-center py-16 lg:py-24">
+                        <div class="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-2xl flex items-center justify-center mb-6">
+                            <svg class="w-10 h-10 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                            </svg>
+                        </div>
+                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" x-text="t('emptyTitle')"></h2>
+                        <p class="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8" x-text="t('emptyMessage')"></p>
+
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 max-w-lg w-full">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4" x-text="t('gettingStarted')"></h3>
+                            <ol class="space-y-3">
+                                <li class="flex items-start gap-3">
+                                    <span class="flex-shrink-0 w-6 h-6 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                                    <span class="text-sm text-gray-600 dark:text-gray-400" x-text="t('step1Desc')"></span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="flex-shrink-0 w-6 h-6 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                                    <span class="text-sm text-gray-600 dark:text-gray-400" x-text="t('step2Desc')"></span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="flex-shrink-0 w-6 h-6 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                                    <span class="text-sm text-gray-600 dark:text-gray-400" x-text="t('step3Desc')"></span>
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ===== RESULTS SECTION (shown when analysis results exist) ===== -->
+                <template x-if="currentResults && !analyzing">
+                    <div class="space-y-6">
+
+                        <!-- Summary Metric Cards -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <!-- Risk Level -->
+                            <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400" x-text="t('riskLevel')"></span>
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
+                                </div>
+                                <span
+                                    class="inline-block text-lg font-bold px-3 py-1 rounded-full"
+                                    :class="severityBadgeClass(currentResults.summary?.risk_level)"
+                                    x-text="currentResults.summary?.risk_level || '---'"
+                                ></span>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 line-clamp-2" x-text="currentResults.summary?.overall_assessment"></p>
+                            </div>
+
+                            <!-- Total Incidents -->
+                            <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400" x-text="t('totalIncidents')"></span>
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                    </svg>
+                                </div>
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="currentResults.summary?.total_incidents ?? 0"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2" x-text="t('detectedEvents')"></p>
+                            </div>
+
+                            <!-- Critical Incidents -->
+                            <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400" x-text="t('criticalIncidents')"></span>
+                                    <svg class="w-5 h-5 text-severity-critical" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </div>
+                                <p class="text-3xl font-bold" :class="(currentResults.summary?.critical_incidents ?? 0) > 0 ? 'text-severity-critical' : 'text-gray-900 dark:text-white'" x-text="currentResults.summary?.critical_incidents ?? 0"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2" x-text="t('requireAttention')"></p>
+                            </div>
+
+                            <!-- Recording Duration -->
+                            <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400" x-text="t('recordingDuration')"></span>
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </div>
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="formatDuration(currentResults.statistics?.audio_duration_minutes)"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2" x-text="t('minutes')"></p>
+                            </div>
+                        </div>
+
+                        <!-- Waveform Section -->
+                        <div x-data="waveformManager()" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div class="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                                    </svg>
+                                    <span x-text="t('waveformTitle')"></span>
+                                </h3>
+                            </div>
+
+                            <!-- Waveform container -->
+                            <div class="px-4 sm:px-5 py-4">
+                                <div id="waveform-container" class="w-full min-h-[128px] bg-gray-50 dark:bg-gray-900 rounded-lg"></div>
+                            </div>
+
+                            <!-- Controls -->
+                            <div class="px-4 sm:px-5 pb-4 flex items-center gap-3 flex-wrap">
+                                <button
+                                    @click="playPause()"
+                                    class="p-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                    :aria-label="isPlaying ? t('pause') : t('play')"
+                                >
+                                    <!-- Play icon -->
+                                    <svg x-show="!isPlaying" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                    <!-- Pause icon -->
+                                    <svg x-show="isPlaying" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                    </svg>
+                                </button>
+                                <button
+                                    @click="stop()"
+                                    class="p-2.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                    :aria-label="t('stop')"
+                                >
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M6 6h12v12H6z"/>
+                                    </svg>
+                                </button>
+                                <span class="text-sm text-gray-600 dark:text-gray-400 font-mono tabular-nums" x-text="currentTime + ' / ' + totalTime"></span>
+
+                                <!-- Legend for incident overlays -->
+                                <div class="ms-auto flex items-center gap-3 flex-wrap text-xs">
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-red-500/60 inline-block"></span> <span x-text="t('violence')"></span></span>
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-orange-500/60 inline-block"></span> <span x-text="t('emotion')"></span></span>
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-blue-500/60 inline-block"></span> <span x-text="t('cry')"></span></span>
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-gray-500/60 inline-block"></span> <span x-text="t('neglect')"></span></span>
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-purple-500/60 inline-block"></span> <span x-text="t('language')"></span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Charts Section -->
+                        <div x-data="chartsManager()" class="space-y-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                </svg>
+                                <span x-text="t('chartsTitle')"></span>
+                            </h3>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <!-- Severity Distribution (Doughnut) -->
+                                <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="t('severityDistribution')"></h4>
+                                    <div class="aspect-square max-h-[280px] mx-auto">
+                                        <canvas id="chart-severity" aria-label="Severity distribution chart" role="img"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Incident Types (Bar) -->
+                                <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="t('incidentTypes')"></h4>
+                                    <div class="aspect-square max-h-[280px] mx-auto">
+                                        <canvas id="chart-types" aria-label="Incident types chart" role="img"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Timeline Density (Line) -->
+                                <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="t('timelineDensity')"></h4>
+                                    <div class="aspect-video max-h-[280px]">
+                                        <canvas id="chart-timeline" aria-label="Timeline density chart" role="img"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Emotion Radar (when available) -->
+                                <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="t('emotionRadar')"></h4>
+                                    <div class="aspect-square max-h-[280px] mx-auto">
+                                        <canvas id="chart-emotion" aria-label="Emotion radar chart" role="img"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Detailed Findings Accordion -->
+                        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div class="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                                    </svg>
+                                    <span x-text="t('detailedFindings')"></span>
+                                </h3>
+                            </div>
+
+                            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+
+                                <!-- Emotions accordion -->
+                                <template x-if="currentResults.detailed_findings?.emotional_analysis?.length > 0">
+                                    <div x-data="{ open: false }">
+                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('emotions')">
+                                            <div class="flex items-center gap-3">
+                                                <span class="w-3 h-3 rounded-full bg-orange-500"></span>
+                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('emotions')"></span>
+                                                <span class="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.emotional_analysis.length"></span>
+                                            </div>
+                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
+                                            <template x-for="(item, i) in currentResults.detailed_findings.emotional_analysis" :key="i">
+                                                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                                                    <div class="flex items-start gap-3">
+                                                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                        <div class="flex-1 min-w-0">
+                                                            <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.detected_emotion || item.description"></p>
+                                                        </div>
+                                                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
+                                                    </div>
+                                                    <template x-if="findClipUrl('emotion', item.timestamp)">
+                                                        <div class="mt-2 flex items-center gap-2">
+                                                            <svg class="w-4 h-4 text-orange-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                                                            <audio controls preload="none" class="h-8 w-full max-w-xs" :src="findClipUrl('emotion', item.timestamp)"></audio>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Violence accordion -->
+                                <template x-if="currentResults.detailed_findings?.violence_analysis?.length > 0">
+                                    <div x-data="{ open: false }">
+                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('violence')">
+                                            <div class="flex items-center gap-3">
+                                                <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('violence')"></span>
+                                                <span class="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.violence_analysis.length"></span>
+                                            </div>
+                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
+                                            <template x-for="(item, i) in currentResults.detailed_findings.violence_analysis" :key="i">
+                                                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                                                    <div class="flex items-start gap-3">
+                                                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                        <div class="flex-1 min-w-0">
+                                                            <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.violence_types || item.description"></p>
+                                                        </div>
+                                                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
+                                                    </div>
+                                                    <template x-if="findClipUrl('violence', item.timestamp)">
+                                                        <div class="mt-2 flex items-center gap-2">
+                                                            <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                                                            <audio controls preload="none" class="h-8 w-full max-w-xs" :src="findClipUrl('violence', item.timestamp)"></audio>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Cry accordion -->
+                                <template x-if="currentResults.detailed_findings?.cry_analysis?.length > 0">
+                                    <div x-data="{ open: false }">
+                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('cry')">
+                                            <div class="flex items-center gap-3">
+                                                <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('cry')"></span>
+                                                <span class="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.cry_analysis.length"></span>
+                                            </div>
+                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
+                                            <template x-for="(item, i) in currentResults.detailed_findings.cry_analysis" :key="i">
+                                                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                                                    <div class="flex items-start gap-3">
+                                                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                        <div class="flex-1 min-w-0">
+                                                            <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.description"></p>
+                                                        </div>
+                                                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
+                                                    </div>
+                                                    <template x-if="findClipUrl('cry', item.timestamp)">
+                                                        <div class="mt-2 flex items-center gap-2">
+                                                            <svg class="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                                                            <audio controls preload="none" class="h-8 w-full max-w-xs" :src="findClipUrl('cry', item.timestamp)"></audio>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Neglect accordion -->
+                                <template x-if="currentResults.detailed_findings?.neglect_analysis?.length > 0">
+                                    <div x-data="{ open: false }">
+                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('neglect')">
+                                            <div class="flex items-center gap-3">
+                                                <span class="w-3 h-3 rounded-full bg-gray-500"></span>
+                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('neglect')"></span>
+                                                <span class="text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.neglect_analysis.length"></span>
+                                            </div>
+                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
+                                            <template x-for="(item, i) in currentResults.detailed_findings.neglect_analysis" :key="i">
+                                                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                                                    <div class="flex items-start gap-3">
+                                                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                        <div class="flex-1 min-w-0">
+                                                            <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.description"></p>
+                                                        </div>
+                                                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
+                                                    </div>
+                                                    <template x-if="findClipUrl('neglect', item.timestamp)">
+                                                        <div class="mt-2 flex items-center gap-2">
+                                                            <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                                                            <audio controls preload="none" class="h-8 w-full max-w-xs" :src="findClipUrl('neglect', item.timestamp)"></audio>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Language accordion -->
+                                <template x-if="currentResults.detailed_findings?.language_analysis?.length > 0">
+                                    <div x-data="{ open: false }">
+                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('language')">
+                                            <div class="flex items-center gap-3">
+                                                <span class="w-3 h-3 rounded-full bg-purple-500"></span>
+                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('language')"></span>
+                                                <span class="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.language_analysis.length"></span>
+                                            </div>
+                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
+                                            <template x-for="(item, i) in currentResults.detailed_findings.language_analysis" :key="i">
+                                                <div class="flex items-start gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                                                    <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                    <div class="flex-1 min-w-0">
+                                                        <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.description || item.word"></p>
+                                                    </div>
+                                                    <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Key Findings -->
+                                <template x-if="currentResults.summary?.key_findings?.length > 0">
+                                    <div x-data="{ open: true }">
+                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('keyFindings')">
+                                            <div class="flex items-center gap-3">
+                                                <span class="w-3 h-3 rounded-full bg-primary-500"></span>
+                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('keyFindings')"></span>
+                                            </div>
+                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4">
+                                            <ul class="space-y-2">
+                                                <template x-for="(finding, i) in currentResults.summary.key_findings" :key="i">
+                                                    <li class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                                        <svg class="w-4 h-4 text-primary-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                        <span x-text="finding"></span>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </template>
+
+                            </div>
+                        </div>
+
+                    </div>
+                </template>
+
             </div>
-        </div>
-        
-        <div class="results-section" id="resultsSection">
-            <h2>תוצאות הניתוח</h2>
-            <div id="resultsContent"></div>
-        </div>
-        
-        <div class="reports-section">
-            <h2>דוחות קודמים</h2>
-            <button class="btn btn-primary" onclick="loadReports()">רענן רשימה</button>
-            <div class="reports-list" id="reportsList">
-                <p>טוען דוחות...</p>
+        </main>
+    </div>
+
+    <!-- ===== REPORT MODAL ===== -->
+    <div
+        x-data="modalManager()"
+        x-show="modalOpen"
+        x-on:open-modal.window="openModal($event.detail)"
+        x-on:keydown.escape.window="closeModal()"
+        x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('reportModal')"
+        style="display: none;"
+    >
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black/60" @click="closeModal()"></div>
+
+        <!-- Modal content -->
+        <div class="relative min-h-screen flex items-center justify-center p-4">
+            <div
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+                @click.stop
+            >
+                <!-- Modal header -->
+                <div class="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="t('reportDetails')"></h2>
+                    <button
+                        @click="closeModal()"
+                        class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        :aria-label="t('close')"
+                    >
+                        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Modal body -->
+                <div class="flex-1 overflow-y-auto p-5 space-y-6">
+                    <template x-if="reportData">
+                        <div>
+                            <!-- Metadata -->
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-2">
+                                <div class="flex items-center gap-2 text-sm">
+                                    <span class="text-gray-500 dark:text-gray-400" x-text="t('fileName') + ':'"></span>
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reportData.metadata?.file_name"></span>
+                                </div>
+                                <div class="flex items-center gap-2 text-sm">
+                                    <span class="text-gray-500 dark:text-gray-400" x-text="t('analysisDate') + ':'"></span>
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reportData.metadata?.analysis_date_hebrew || reportData.metadata?.analysis_date"></span>
+                                </div>
+                                <div class="flex items-center gap-2 text-sm">
+                                    <span class="text-gray-500 dark:text-gray-400" x-text="t('overallAssessment') + ':'"></span>
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reportData.summary?.overall_assessment"></span>
+                                </div>
+                                <div class="flex items-center gap-2 text-sm">
+                                    <span class="text-gray-500 dark:text-gray-400" x-text="t('totalIncidents') + ':'"></span>
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reportData.summary?.total_incidents"></span>
+                                </div>
+                            </div>
+
+                            <!-- Detailed findings in modal -->
+                            <template x-if="reportData.detailed_findings">
+                                <div class="space-y-4">
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white" x-text="t('detailedFindings')"></h3>
+
+                                    <!-- Emotional -->
+                                    <template x-if="reportData.detailed_findings.emotional_analysis?.length > 0">
+                                        <div>
+                                            <h4 class="text-sm font-medium text-orange-600 dark:text-orange-400 mb-2" x-text="t('emotions')"></h4>
+                                            <template x-for="(item, i) in reportData.detailed_findings.emotional_analysis" :key="'me'+i">
+                                                <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                                    <span class="text-xs font-mono text-gray-500 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                    <p class="text-sm text-gray-900 dark:text-gray-100 flex-1" x-text="item.detected_emotion + ' (' + item.severity + ')'"></p>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <!-- Violence -->
+                                    <template x-if="reportData.detailed_findings.violence_analysis?.length > 0">
+                                        <div>
+                                            <h4 class="text-sm font-medium text-red-600 dark:text-red-400 mb-2" x-text="t('violence')"></h4>
+                                            <template x-for="(item, i) in reportData.detailed_findings.violence_analysis" :key="'mv'+i">
+                                                <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                                    <span class="text-xs font-mono text-gray-500 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                    <p class="text-sm text-gray-900 dark:text-gray-100 flex-1" x-text="(item.violence_types || item.description) + ' (' + item.severity + ')'"></p>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <!-- Cry -->
+                                    <template x-if="reportData.detailed_findings.cry_analysis?.length > 0">
+                                        <div>
+                                            <h4 class="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2" x-text="t('cry')"></h4>
+                                            <template x-for="(item, i) in reportData.detailed_findings.cry_analysis" :key="'mc'+i">
+                                                <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                                    <span class="text-xs font-mono text-gray-500 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                    <p class="text-sm text-gray-900 dark:text-gray-100 flex-1" x-text="item.description"></p>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <!-- Neglect -->
+                                    <template x-if="reportData.detailed_findings.neglect_analysis?.length > 0">
+                                        <div>
+                                            <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2" x-text="t('neglect')"></h4>
+                                            <template x-for="(item, i) in reportData.detailed_findings.neglect_analysis" :key="'mn'+i">
+                                                <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                                    <span class="text-xs font-mono text-gray-500 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
+                                                    <p class="text-sm text-gray-900 dark:text-gray-100 flex-1" x-text="item.description"></p>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <!-- Recommendations -->
+                                    <template x-if="reportData.recommendations?.length > 0">
+                                        <div>
+                                            <h4 class="text-sm font-medium text-primary-600 dark:text-primary-400 mb-2" x-text="t('recommendations')"></h4>
+                                            <ul class="space-y-1">
+                                                <template x-for="(rec, i) in reportData.recommendations" :key="'rec'+i">
+                                                    <li class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                                        <svg class="w-4 h-4 text-primary-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                                        <span x-text="rec"></span>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- Audio clips -->
+                            <template x-if="reportData.audio_clips?.length > 0">
+                                <div>
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3" x-text="t('audioClips')"></h3>
+                                    <template x-for="(clip, i) in reportData.audio_clips" :key="'clip'+i">
+                                        <div class="p-3 mb-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                                            <p class="text-xs text-gray-600 dark:text-gray-400 mb-1" x-text="clip.incident_type + ' - ' + clip.duration?.toFixed(1) + 's'"></p>
+                                            <audio controls class="w-full" preload="none">
+                                                <source :src="'/audio_clip/' + clip.filename" type="audio/wav">
+                                            </audio>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Modal footer -->
+                <div class="flex items-center justify-end gap-3 p-5 border-t border-gray-200 dark:border-gray-700 flex-wrap">
+                    <a
+                        :href="reportFilename ? '/download/' + reportFilename : '#'"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors min-h-[44px]"
+                        :aria-label="t('downloadJSON')"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        JSON
+                    </a>
+                    <a
+                        :href="reportFilename ? '/download/' + reportFilename.replace('.json', '.html') : '#'"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors min-h-[44px]"
+                        :aria-label="t('downloadHTML')"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        HTML
+                    </a>
+                    <a
+                        :href="reportFilename ? '/download/' + reportFilename.replace('.json', '.csv') : '#'"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors min-h-[44px]"
+                        :aria-label="t('downloadCSV')"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        CSV
+                    </a>
+                    <button
+                        @click="closeModal()"
+                        class="px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium transition-colors min-h-[44px]"
+                        x-text="t('close')"
+                    ></button>
+                </div>
             </div>
         </div>
     </div>
-    
+
+    <!-- ===== PROGRESS OVERLAY (during analysis) ===== -->
+    <div
+        x-show="analyzing"
+        x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+        class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+        style="display: none;"
+    >
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <!-- Header -->
+            <div class="text-center">
+                <div class="w-14 h-14 mx-auto bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mb-3">
+                    <svg class="w-7 h-7 text-primary-600 dark:text-primary-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="t('analyzingAudio')"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="progressMessage"></p>
+            </div>
+
+            <!-- Progress bar -->
+            <div>
+                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+                    <span x-text="t('step') + ' ' + progressStep + ' / ' + progressTotal"></span>
+                    <span x-text="progressPercent + '%'"></span>
+                </div>
+                <div
+                    class="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"
+                    role="progressbar"
+                    :aria-valuenow="progressPercent"
+                    aria-valuemin="0"
+                    :aria-valuemax="100"
+                    :aria-label="t('analysisProgress')"
+                >
+                    <div class="h-full bg-primary-600 rounded-full transition-all duration-500 ease-out" :style="'width: ' + progressPercent + '%'"></div>
+                </div>
+            </div>
+
+            <!-- Step indicators -->
+            <div class="space-y-1.5">
+                <template x-for="step in progressSteps" :key="step.num">
+                    <div class="flex items-center gap-3 p-2 rounded-lg text-sm transition-all" :class="{
+                        'bg-green-50 dark:bg-green-900/20': step.num < progressStep,
+                        'bg-primary-50 dark:bg-primary-900/20': step.num === progressStep,
+                        '': step.num > progressStep
+                    }">
+                        <!-- Step number circle -->
+                        <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold" :class="{
+                            'bg-green-500 text-white': step.num < progressStep,
+                            'bg-primary-600 text-white': step.num === progressStep,
+                            'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400': step.num > progressStep
+                        }">
+                            <!-- Checkmark for completed -->
+                            <template x-if="step.num < progressStep">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            </template>
+                            <template x-if="step.num >= progressStep">
+                                <span x-text="step.num"></span>
+                            </template>
+                        </div>
+                        <span class="text-gray-700 dark:text-gray-300" :class="{ 'font-medium': step.num === progressStep }" x-text="t(step.key)"></span>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Cancel button -->
+            <div class="text-center">
+                <button
+                    @click="cancelAnalysis()"
+                    class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm transition-colors min-h-[44px]"
+                    :aria-label="t('cancelButton')"
+                    x-text="t('cancelButton')"
+                ></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== TOAST NOTIFICATIONS ===== -->
+    <div class="fixed bottom-4 end-4 z-50 space-y-2" id="toast-container">
+        <template x-for="(toast, i) in toasts" :key="toast.id">
+            <div
+                x-show="toast.visible"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-2"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 translate-y-2"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg min-w-[300px] max-w-md"
+                :class="{
+                    'bg-green-600 text-white': toast.type === 'success',
+                    'bg-red-600 text-white': toast.type === 'error',
+                    'bg-blue-600 text-white': toast.type === 'info'
+                }"
+            >
+                <svg x-show="toast.type === 'success'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                <svg x-show="toast.type === 'error'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                <svg x-show="toast.type === 'info'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span class="text-sm font-medium" x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+
+    <!-- ===== SCRIPTS ===== -->
     <script>
-        let currentAnalysis = null;
-        
-        // File upload handling
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
-        const loading = document.getElementById('loading');
-        const resultsSection = document.getElementById('resultsSection');
-        const resultsContent = document.getElementById('resultsContent');
-        
-        // Drag and drop functionality
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-        
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-        
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFile(files[0]);
-            }
-        });
-        
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
-            }
-        });
-        
-        let progressCheckInterval = null;
-        
-        function updateProgressDisplay() {
-            fetch('/progress')
-                .then(response => response.json())
-                .then(data => {
-                    const progressMessage = document.getElementById('progressMessage');
-                    const progressSteps = document.getElementById('progressSteps');
-                    
-                    // Always show progress if we're checking
-                    if (data.status === 'analyzing' || data.status === 'initializing' || data.status === 'completed') {
-                        if (progressMessage) {
-                            progressMessage.textContent = data.message || 'מעבד... / Processing...';
+    /* ========================================
+       Translations (EN / HE)
+       ======================================== */
+    const translations = {
+        en: {
+            pageTitle: 'SoundShield-AI - Kindergarten Audio Analysis',
+            subtitle: 'Kindergarten Audio Analysis',
+            skipToContent: 'Skip to main content',
+            toggleSidebar: 'Toggle sidebar',
+            toggleLanguage: 'Toggle language',
+            toggleDarkMode: 'Toggle dark mode',
+            uploadTitle: 'Upload Audio',
+            uploadDragDrop: 'Drag & drop audio file or click to browse',
+            uploadDropzone: 'Audio file upload dropzone',
+            analysisLanguage: 'Analysis Language',
+            uploadButton: 'Upload & Analyze',
+            cancelButton: 'Cancel',
+            analyzing: 'Analyzing...',
+            historyTitle: 'Analysis History',
+            refreshHistory: 'Refresh history',
+            noHistory: 'No analyses yet',
+            viewReport: 'View report',
+            emptyTitle: 'Upload an audio file to begin analysis',
+            emptyMessage: 'SoundShield-AI will analyze the recording for signs of emotional abuse, violence, neglect, inappropriate language, and inadequate response to child distress.',
+            gettingStarted: 'Getting Started',
+            step1Desc: 'Upload a kindergarten audio recording (WAV, MP3, M4A, FLAC, AAC, OGG)',
+            step2Desc: 'Select the analysis language (Hebrew or English)',
+            step3Desc: 'Review the detailed analysis report with incidents, waveform, and charts',
+            riskLevel: 'Risk Level',
+            totalIncidents: 'Total Incidents',
+            criticalIncidents: 'Critical Incidents',
+            recordingDuration: 'Recording Duration',
+            detectedEvents: 'Detected events',
+            requireAttention: 'Require immediate attention',
+            minutes: 'minutes',
+            waveformTitle: 'Audio Waveform',
+            play: 'Play',
+            pause: 'Pause',
+            stop: 'Stop',
+            violence: 'Violence',
+            emotion: 'Emotions',
+            cry: 'Cries',
+            neglect: 'Neglect',
+            language: 'Language',
+            chartsTitle: 'Analysis Charts',
+            severityDistribution: 'Severity Distribution',
+            incidentTypes: 'Incident Types',
+            timelineDensity: 'Timeline Density',
+            emotionRadar: 'Emotion Radar',
+            detailedFindings: 'Detailed Findings',
+            emotions: 'Emotional Analysis',
+            keyFindings: 'Key Findings',
+            reportModal: 'Analysis report modal',
+            reportDetails: 'Report Details',
+            close: 'Close',
+            fileName: 'File',
+            analysisDate: 'Analysis Date',
+            overallAssessment: 'Overall Assessment',
+            downloadJSON: 'Download JSON',
+            downloadHTML: 'Download HTML',
+            downloadCSV: 'Download CSV',
+            recommendations: 'Recommendations',
+            audioClips: 'Audio Clips',
+            analyzingAudio: 'Analyzing Audio',
+            step: 'Step',
+            analysisProgress: 'Analysis progress',
+            progressStep1: 'Basic audio analysis',
+            progressStep2: 'Emotion detection',
+            progressStep3: 'Baby cry detection',
+            progressStep4: 'Violence detection',
+            progressStep5: 'Neglect detection',
+            progressStep6: 'Advanced ML analysis',
+            progressStep7: 'Inappropriate language detection',
+            analysisComplete: 'Analysis completed successfully!',
+            analysisError: 'Analysis error',
+            uploadError: 'Upload error'
+        },
+        he: {
+            pageTitle: 'SoundShield-AI - ניתוח הקלטות גן ילדים',
+            subtitle: 'ניתוח הקלטות גן ילדים',
+            skipToContent: 'דלג לתוכן הראשי',
+            toggleSidebar: 'פתח/סגור תפריט צד',
+            toggleLanguage: 'החלף שפה',
+            toggleDarkMode: 'מצב כהה/בהיר',
+            uploadTitle: 'העלאת אודיו',
+            uploadDragDrop: 'גרור קובץ אודיו לכאן או לחץ לבחירה',
+            uploadDropzone: 'אזור העלאת קובץ אודיו',
+            analysisLanguage: 'שפת הניתוח',
+            uploadButton: 'העלה ונתח',
+            cancelButton: 'ביטול',
+            analyzing: 'מנתח...',
+            historyTitle: 'היסטוריית ניתוחים',
+            refreshHistory: 'רענן היסטוריה',
+            noHistory: 'אין ניתוחים עדיין',
+            viewReport: 'צפה בדוח',
+            emptyTitle: 'העלה קובץ אודיו כדי להתחיל ניתוח',
+            emptyMessage: 'SoundShield-AI ינתח את ההקלטה לאיתור סימנים של התעללות רגשית, אלימות, הזנחה, שפה לא הולמת ותגובה לא מספקת למצוקת ילדים.',
+            gettingStarted: 'איך להתחיל',
+            step1Desc: 'העלה הקלטת גן ילדים (WAV, MP3, M4A, FLAC, AAC, OGG)',
+            step2Desc: 'בחר את שפת הניתוח (עברית או אנגלית)',
+            step3Desc: 'עיין בדוח הניתוח המפורט עם אירועים, צורת גל ותרשימים',
+            riskLevel: 'רמת סיכון',
+            totalIncidents: 'סך אירועים',
+            criticalIncidents: 'אירועים קריטיים',
+            recordingDuration: 'משך הקלטה',
+            detectedEvents: 'אירועים שזוהו',
+            requireAttention: 'דורשים תשומת לב מיידית',
+            minutes: 'דקות',
+            waveformTitle: 'צורת גל אודיו',
+            play: 'נגן',
+            pause: 'השהה',
+            stop: 'עצור',
+            violence: 'אלימות',
+            emotion: 'רגשות',
+            cry: 'בכי',
+            neglect: 'הזנחה',
+            language: 'שפה',
+            chartsTitle: 'תרשימי ניתוח',
+            severityDistribution: 'התפלגות חומרה',
+            incidentTypes: 'סוגי אירועים',
+            timelineDensity: 'צפיפות ציר זמן',
+            emotionRadar: 'רדאר רגשות',
+            detailedFindings: 'ממצאים מפורטים',
+            emotions: 'ניתוח רגשי',
+            keyFindings: 'ממצאים עיקריים',
+            reportModal: 'חלון דוח ניתוח',
+            reportDetails: 'פרטי הדוח',
+            close: 'סגור',
+            fileName: 'קובץ',
+            analysisDate: 'תאריך ניתוח',
+            overallAssessment: 'הערכה כללית',
+            downloadJSON: 'הורד JSON',
+            downloadHTML: 'הורד HTML',
+            downloadCSV: 'הורד CSV',
+            recommendations: 'המלצות',
+            audioClips: 'קטעי אודיו',
+            analyzingAudio: 'מנתח אודיו',
+            step: 'שלב',
+            analysisProgress: 'התקדמות ניתוח',
+            progressStep1: 'ניתוח אודיו בסיסי',
+            progressStep2: 'זיהוי רגשות',
+            progressStep3: 'זיהוי בכי',
+            progressStep4: 'זיהוי אלימות',
+            progressStep5: 'זיהוי הזנחה',
+            progressStep6: 'ניתוח מתקדם עם ML',
+            progressStep7: 'זיהוי שפה לא הולמת',
+            analysisComplete: 'הניתוח הושלם בהצלחה!',
+            analysisError: 'שגיאה בניתוח',
+            uploadError: 'שגיאה בהעלאה'
+        }
+    };
+
+    /* ========================================
+       Main Alpine.js App State
+       ======================================== */
+    function appState() {
+        return {
+            lang: 'en',
+            dir: 'ltr',
+            darkMode: false,
+            sidebarOpen: false,
+            currentResults: null,
+            analyzing: false,
+            history: [],
+            toasts: [],
+            toastId: 0,
+
+            // Progress tracking
+            progressStep: 0,
+            progressTotal: 7,
+            progressMessage: '',
+            progressPercent: 0,
+            progressInterval: null,
+            progressSteps: [
+                { num: 1, key: 'progressStep1' },
+                { num: 2, key: 'progressStep2' },
+                { num: 3, key: 'progressStep3' },
+                { num: 4, key: 'progressStep4' },
+                { num: 5, key: 'progressStep5' },
+                { num: 6, key: 'progressStep6' },
+                { num: 7, key: 'progressStep7' }
+            ],
+
+            init() {
+                // Check saved preferences
+                const savedDark = localStorage.getItem('ss-dark-mode');
+                if (savedDark !== null) {
+                    this.darkMode = savedDark === 'true';
+                } else {
+                    this.darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                }
+                const savedLang = localStorage.getItem('ss-lang');
+                if (savedLang) {
+                    this.lang = savedLang;
+                    this.dir = savedLang === 'he' ? 'rtl' : 'ltr';
+                }
+
+                this.$watch('darkMode', (val) => localStorage.setItem('ss-dark-mode', val));
+                this.$watch('lang', (val) => localStorage.setItem('ss-lang', val));
+
+                this.loadHistory();
+            },
+
+            t(key) {
+                return translations[this.lang]?.[key] || translations['en'][key] || key;
+            },
+
+            toggleLang() {
+                if (this.lang === 'en') {
+                    this.lang = 'he';
+                    this.dir = 'rtl';
+                } else {
+                    this.lang = 'en';
+                    this.dir = 'ltr';
+                }
+            },
+
+            severityBadgeClass(level) {
+                if (!level) return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                const l = level.toLowerCase();
+                if (l === 'low' || l === 'minimal') return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+                if (l === 'medium' || l === 'moderate') return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+                if (l === 'high') return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300';
+                if (l === 'critical' || l === 'severe') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+                return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+            },
+
+            formatDate(dateStr) {
+                if (!dateStr) return '';
+                try {
+                    const d = new Date(dateStr);
+                    return d.toLocaleDateString(this.lang === 'he' ? 'he-IL' : 'en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                } catch {
+                    return dateStr;
+                }
+            },
+
+            formatDuration(minutes) {
+                if (minutes == null) return '0.0';
+                return Number(minutes).toFixed(1);
+            },
+
+            showToast(message, type = 'info') {
+                const id = ++this.toastId;
+                this.toasts.push({ id, message, type, visible: true });
+                setTimeout(() => {
+                    const toast = this.toasts.find(t => t.id === id);
+                    if (toast) toast.visible = false;
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 300);
+                }, 5000);
+            },
+
+            loadHistory() {
+                fetch('/reports')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.history = data.reports || [];
                         }
-                        if (progressSteps) {
-                            progressSteps.style.display = 'block';
+                    })
+                    .catch(() => {});
+            },
+
+            viewReport(filename) {
+                fetch('/report/' + filename)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.$dispatch('open-modal', { report: data.report, filename: filename });
                         }
-                        
-                        // Update step indicators
-                        const currentStep = data.step || 0;
-                        for (let i = 1; i <= 7; i++) {
-                            const stepElement = document.getElementById('step' + i);
-                            if (stepElement) {
-                                if (i < currentStep) {
-                                    stepElement.className = 'step-indicator completed';
-                                } else if (i === currentStep && currentStep > 0) {
-                                    stepElement.className = 'step-indicator active';
-                                } else {
-                                    stepElement.className = 'step-indicator';
-                                }
+                    })
+                    .catch(() => {
+                        this.showToast(this.t('analysisError'), 'error');
+                    });
+            },
+
+            startProgressPolling() {
+                this.progressStep = 0;
+                this.progressPercent = 0;
+                this.progressMessage = '';
+                this.analyzing = true;
+
+                this.progressInterval = setInterval(() => {
+                    fetch('/progress')
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.status === 'analyzing' || data.status === 'initializing' || data.status === 'completed') {
+                                this.progressStep = data.step || 0;
+                                this.progressTotal = data.total_steps || 7;
+                                this.progressMessage = data.message || '';
+                                this.progressPercent = Math.min(Math.round((this.progressStep / this.progressTotal) * 100), 100);
                             }
+                            if (data.status === 'completed') {
+                                this.stopProgressPolling();
+                            }
+                        })
+                        .catch(() => {});
+                }, 400);
+            },
+
+            stopProgressPolling() {
+                if (this.progressInterval) {
+                    clearInterval(this.progressInterval);
+                    this.progressInterval = null;
+                }
+            },
+
+            cancelAnalysis() {
+                this.stopProgressPolling();
+                this.analyzing = false;
+            }
+        };
+    }
+
+    /* ========================================
+       Upload Manager
+       ======================================== */
+    function uploadManager() {
+        return {
+            selectedFile: null,
+            uploading: false,
+            dragOver: false,
+            analysisLang: 'he',
+
+            handleDrop(event) {
+                this.dragOver = false;
+                const files = event.dataTransfer.files;
+                if (files.length > 0) {
+                    this.selectedFile = files[0];
+                }
+            },
+
+            handleFileSelect(event) {
+                if (event.target.files.length > 0) {
+                    this.selectedFile = event.target.files[0];
+                }
+            },
+
+            clearFile() {
+                this.selectedFile = null;
+                this.$refs.fileInput.value = '';
+            },
+
+            formatFileSize(bytes) {
+                if (!bytes) return '';
+                if (bytes < 1024) return bytes + ' B';
+                if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+                return (bytes / 1048576).toFixed(1) + ' MB';
+            },
+
+            uploadFile() {
+                if (!this.selectedFile || this.uploading) return;
+                this.uploading = true;
+
+                const appData = Alpine.$data(document.querySelector('[x-data="appState()"]'));
+                appData.startProgressPolling();
+
+                const formData = new FormData();
+                formData.append('file', this.selectedFile);
+                formData.append('language', this.analysisLang);
+
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    appData.stopProgressPolling();
+                    appData.progressPercent = 100;
+
+                    setTimeout(() => {
+                        appData.analyzing = false;
+                        this.uploading = false;
+
+                        if (data.success) {
+                            appData.currentResults = data.results;
+                            appData.audioClips = data.audio_clips || [];
+                            appData.currentFilename = data.filename || '';
+                            appData.showToast(appData.t('analysisComplete'), 'success');
+                            appData.loadHistory();
+
+                            // Dispatch event for waveform and charts to pick up
+                            window.dispatchEvent(new CustomEvent('analysis-complete', { detail: data }));
+                        } else {
+                            appData.showToast(appData.t('analysisError') + ': ' + (data.error || ''), 'error');
                         }
-                        
-                        // Update progress bar
-                        const progressPercent = Math.min((currentStep / data.total_steps) * 100, 100);
-                        if (progressFill) {
-                            progressFill.style.width = progressPercent + '%';
-                        }
-                        
-                        // If completed, stop checking after a delay
-                        if (data.status === 'completed') {
-                            setTimeout(() => {
-                                if (progressCheckInterval) {
-                                    clearInterval(progressCheckInterval);
-                                    progressCheckInterval = null;
-                                }
-                            }, 2000);
-                        }
-                    } else if (data.status === 'idle') {
-                        // Only stop if we're not in the middle of an upload
-                        // Don't stop immediately, wait a bit
-                    }
+
+                        this.clearFile();
+                    }, 800);
                 })
                 .catch(error => {
-                    console.error('Error fetching progress:', error);
+                    appData.stopProgressPolling();
+                    appData.analyzing = false;
+                    this.uploading = false;
+                    appData.showToast(appData.t('uploadError') + ': ' + error.message, 'error');
                 });
-        }
-        
-        function handleFile(file) {
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            // Get selected language
-            const languageSelect = document.getElementById('languageSelect');
-            const selectedLanguage = languageSelect.value;
-            formData.append('language', selectedLanguage);
-            
-            // Show loading
-            loading.style.display = 'block';
-            progressBar.style.display = 'block';
-            resultsSection.style.display = 'none';
-            
-            // Show progress steps immediately
-            const progressSteps = document.getElementById('progressSteps');
-            progressSteps.style.display = 'block';
-            const progressMessage = document.getElementById('progressMessage');
-            progressMessage.textContent = 'מתחיל ניתוח... / Starting analysis...';
-            
-            // Reset progress steps
-            for (let i = 1; i <= 7; i++) {
-                const stepElement = document.getElementById('step' + i);
-                stepElement.className = 'step-indicator';
             }
-            
-            // Start checking progress every 300ms (more frequent)
-            if (progressCheckInterval) {
-                clearInterval(progressCheckInterval);
-            }
-            progressCheckInterval = setInterval(updateProgressDisplay, 300);
-            updateProgressDisplay(); // Call immediately
-            
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (progressCheckInterval) {
-                    clearInterval(progressCheckInterval);
-                    progressCheckInterval = null;
-                }
-                progressFill.style.width = '100%';
-                
-                setTimeout(() => {
-                    loading.style.display = 'none';
-                    progressBar.style.display = 'none';
-                    
-                    if (data.success) {
-                        showResults(data.results);
-                        showAlert('ניתוח הושלם בהצלחה!', 'success');
-                        loadReports(); // Refresh reports list
-                    } else {
-                        showAlert('שגיאה בניתוח: ' + data.error, 'error');
-                    }
-                }, 1000);
-            })
-            .catch(error => {
-                if (progressCheckInterval) {
-                    clearInterval(progressCheckInterval);
-                    progressCheckInterval = null;
-                }
-                loading.style.display = 'none';
-                progressBar.style.display = 'none';
-                showAlert('שגיאה בהעלאת הקובץ: ' + error.message, 'error');
-            });
-        }
-        
-        function showResults(results) {
-            const summary = results.summary;
-            const stats = results.statistics;
-            
-            let html = `
-                <div class="results-grid">
-                    <div class="result-card">
-                        <h3>הערכה כללית</h3>
-                        <p>${summary.overall_assessment}</p>
-                        <span class="severity-badge severity-${summary.risk_level}">
-                            רמת סיכון: ${summary.risk_level}
-                        </span>
-                    </div>
-                    <div class="result-card">
-                        <h3>סה"כ אירועים</h3>
-                        <p>${summary.total_incidents}</p>
-                    </div>
-                    <div class="result-card">
-                        <h3>אירועים קריטיים</h3>
-                        <p>${summary.critical_incidents}</p>
-                    </div>
-                    <div class="result-card">
-                        <h3>משך הקלטה</h3>
-                        <p>${stats.audio_duration_minutes.toFixed(1)} דקות</p>
-                    </div>
-                </div>
-            `;
-            
-            if (summary.key_findings && summary.key_findings.length > 0) {
-                html += '<h3>ממצאים עיקריים:</h3><ul>';
-                summary.key_findings.forEach(finding => {
-                    html += `<li>${finding}</li>`;
+        };
+    }
+
+    /* ========================================
+       Waveform Manager
+       ======================================== */
+    function waveformManager() {
+        return {
+            wavesurfer: null,
+            isPlaying: false,
+            currentTime: '0:00',
+            totalTime: '0:00',
+
+            init() {
+                window.addEventListener('analysis-complete', (e) => {
+                    this.$nextTick(() => this.initWaveform(e.detail));
                 });
-                html += '</ul>';
-            }
-            
-            resultsContent.innerHTML = html;
-            resultsSection.style.display = 'block';
-        }
-        
-        function showAlert(message, type) {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type}`;
-            alertDiv.textContent = message;
-            
-            const container = document.querySelector('.container');
-            container.insertBefore(alertDiv, container.firstChild);
-            
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 5000);
-        }
-        
-        function loadReports() {
-            fetch('/reports')
-            .then(response => response.json())
-            .then(data => {
-                const reportsList = document.getElementById('reportsList');
-                
-                if (data.success && data.reports.length > 0) {
-                    let html = '';
-                    data.reports.forEach(report => {
-                        const date = new Date(report.date).toLocaleDateString('he-IL');
-                        html += `
-                            <div class="report-item">
-                                <div>
-                                    <strong>${report.original_file}</strong><br>
-                                    <small>נוצר ב: ${date}</small>
-                                </div>
-                                <div class="report-actions">
-                                    <button class="btn btn-primary" onclick="viewReport('${report.filename}')">
-                                        צפה בדוח
-                                    </button>
-                                    <a href="/download/${report.filename}" class="btn btn-secondary">
-                                        הורד JSON
-                                    </a>
-                                </div>
-                            </div>
-                        `;
+            },
+
+            initWaveform(data) {
+                const container = document.getElementById('waveform-container');
+                if (!container) return;
+
+                // Destroy previous instance
+                if (this.wavesurfer) {
+                    this.wavesurfer.destroy();
+                    this.wavesurfer = null;
+                }
+
+                // Check if we have an uploaded audio URL
+                if (!data || !data.filename) return;
+
+                const audioUrl = '/uploads/' + data.filename;
+
+                try {
+                    this.wavesurfer = WaveSurfer.create({
+                        container: container,
+                        waveColor: '#93C5FD',
+                        progressColor: '#2563EB',
+                        cursorColor: '#1D4ED8',
+                        barWidth: 2,
+                        barGap: 1,
+                        barRadius: 2,
+                        height: 128,
+                        responsive: true,
+                        url: audioUrl
                     });
-                    reportsList.innerHTML = html;
-                } else {
-                    reportsList.innerHTML = '<p>אין דוחות זמינים</p>';
+
+                    this.wavesurfer.on('ready', () => {
+                        this.totalTime = this.formatTime(this.wavesurfer.getDuration());
+                    });
+
+                    this.wavesurfer.on('audioprocess', () => {
+                        this.currentTime = this.formatTime(this.wavesurfer.getCurrentTime());
+                    });
+
+                    this.wavesurfer.on('seeking', () => {
+                        this.currentTime = this.formatTime(this.wavesurfer.getCurrentTime());
+                    });
+
+                    this.wavesurfer.on('play', () => { this.isPlaying = true; });
+                    this.wavesurfer.on('pause', () => { this.isPlaying = false; });
+                    this.wavesurfer.on('finish', () => { this.isPlaying = false; });
+                } catch (err) {
+                    console.warn('WaveSurfer init error:', err);
                 }
-            })
-            .catch(error => {
-                document.getElementById('reportsList').innerHTML = 
-                    '<p>שגיאה בטעינת הדוחות</p>';
-            });
-        }
-        
-        function viewReport(filename) {
-            fetch(`/report/${filename}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Open report in new window
-                    const reportWindow = window.open('', '_blank');
-                    reportWindow.document.write(`
-                        <html dir="rtl" lang="he">
-                        <head>
-                            <meta charset="UTF-8">
-                            <title>דוח ניתוח - ${data.report.metadata.file_name}</title>
-                            <style>
-                                body { font-family: Arial, sans-serif; margin: 20px; background: #f5f7fa; }
-                                h1 { color: #667eea; }
-                                .summary { background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; }
-                                .finding { background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #667eea; }
-                                .audio-player { 
-                                    background: #e8f4f8; 
-                                    padding: 15px; 
-                                    border-radius: 8px; 
-                                    margin: 10px 0; 
-                                    border: 1px solid #dee2e6;
-                                }
-                                .audio-player audio { 
-                                    width: 100%; 
-                                    margin: 10px 0; 
-                                    border-radius: 5px;
-                                }
-                            </style>
-                        </head>
-                        <body>
-                            <h1>דוח ניתוח הקלטות גן ילדים</h1>
-                            <div class="summary">
-                                <h2>סיכום כללי</h2>
-                                <p><strong>קובץ:</strong> ${data.report.metadata.file_name}</p>
-                                <p><strong>תאריך ניתוח:</strong> ${data.report.metadata.analysis_date_hebrew}</p>
-                                <p><strong>הערכה כללית:</strong> ${data.report.summary.overall_assessment}</p>
-                                <p><strong>סה"כ אירועים:</strong> ${data.report.summary.total_incidents}</p>
-                            </div>
-                            
-                            <h2>ממצאים מפורטים</h2>
-                            ${generateDetailedFindingsHTML(data.report.detailed_findings, data.report.audio_clips || [])}
-                            
-                            <h2>המלצות</h2>
-                            <ul>
-                                ${data.report.recommendations.map(rec => `<li>${rec}</li>`).join('')}
-                            </ul>
-                        </body>
-                        </html>
-                    `);
+            },
+
+            formatTime(seconds) {
+                if (!seconds || isNaN(seconds)) return '0:00';
+                const m = Math.floor(seconds / 60);
+                const s = Math.floor(seconds % 60);
+                return m + ':' + (s < 10 ? '0' : '') + s;
+            },
+
+            playPause() {
+                if (this.wavesurfer) {
+                    this.wavesurfer.playPause();
                 }
-            })
-            .catch(error => {
-                showAlert('שגיאה בטעינת הדוח', 'error');
-            });
-        }
-        
-        function generateDetailedFindingsHTML(findings, audioClips) {
-            let html = '';
-            
-            // Find matching audio clip
-            function findClip(incidentType, timestamp) {
-                for (let clip of audioClips) {
-                    if (clip.incident_type === incidentType) {
-                        try {
-                            const startTime = parseFloat(timestamp.split(' - ')[0].replace('s', ''));
-                            if (Math.abs(clip.start_time - startTime) < 1.0) {
-                                return clip;
+            },
+
+            stop() {
+                if (this.wavesurfer) {
+                    this.wavesurfer.stop();
+                    this.isPlaying = false;
+                    this.currentTime = '0:00';
+                }
+            }
+        };
+    }
+
+    /* ========================================
+       Charts Manager
+       ======================================== */
+    function chartsManager() {
+        return {
+            charts: {},
+
+            init() {
+                window.addEventListener('analysis-complete', (e) => {
+                    this.$nextTick(() => this.renderCharts(e.detail));
+                });
+            },
+
+            renderCharts(data) {
+                if (!data || !data.results) return;
+                const results = data.results;
+                const findings = results.detailed_findings || {};
+
+                // Destroy existing charts
+                Object.values(this.charts).forEach(c => { if (c) c.destroy(); });
+                this.charts = {};
+
+                const isDark = document.documentElement.classList.contains('dark');
+                const textColor = isDark ? '#CBD5E1' : '#475569';
+                const gridColor = isDark ? 'rgba(148,163,184,0.1)' : 'rgba(148,163,184,0.2)';
+
+                // --- Severity Distribution (Doughnut) ---
+                const severityCounts = { low: 0, medium: 0, high: 0, critical: 0 };
+                const allFindings = [
+                    ...(findings.emotional_analysis || []),
+                    ...(findings.violence_analysis || []),
+                    ...(findings.cry_analysis || []),
+                    ...(findings.neglect_analysis || []),
+                    ...(findings.language_analysis || [])
+                ];
+                allFindings.forEach(f => {
+                    const sev = (f.severity || 'low').toLowerCase();
+                    if (sev in severityCounts) severityCounts[sev]++;
+                    else severityCounts['low']++;
+                });
+
+                const sevCtx = document.getElementById('chart-severity');
+                if (sevCtx) {
+                    this.charts.severity = new Chart(sevCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Low', 'Medium', 'High', 'Critical'],
+                            datasets: [{
+                                data: [severityCounts.low, severityCounts.medium, severityCounts.high, severityCounts.critical],
+                                backgroundColor: ['#22C55E', '#EAB308', '#F97316', '#EF4444'],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { color: textColor, padding: 12 } }
                             }
-                        } catch(e) {}
+                        }
+                    });
+                }
+
+                // --- Incident Types (Bar) ---
+                const typeCounts = {
+                    'Emotions': (findings.emotional_analysis || []).length,
+                    'Violence': (findings.violence_analysis || []).length,
+                    'Cries': (findings.cry_analysis || []).length,
+                    'Neglect': (findings.neglect_analysis || []).length,
+                    'Language': (findings.language_analysis || []).length
+                };
+                const typesCtx = document.getElementById('chart-types');
+                if (typesCtx) {
+                    this.charts.types = new Chart(typesCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: Object.keys(typeCounts),
+                            datasets: [{
+                                label: 'Count',
+                                data: Object.values(typeCounts),
+                                backgroundColor: ['#F97316', '#EF4444', '#3B82F6', '#6B7280', '#8B5CF6'],
+                                borderRadius: 6,
+                                borderSkipped: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor }, grid: { color: gridColor } },
+                                x: { ticks: { color: textColor }, grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+
+                // --- Timeline Density (Line) ---
+                const timelineCtx = document.getElementById('chart-timeline');
+                if (timelineCtx) {
+                    // Group incidents by time buckets
+                    const duration = results.statistics?.audio_duration_minutes || 1;
+                    const bucketCount = Math.min(Math.max(Math.ceil(duration), 5), 20);
+                    const bucketSize = (duration * 60) / bucketCount;
+                    const buckets = new Array(bucketCount).fill(0);
+
+                    allFindings.forEach(f => {
+                        if (f.timestamp) {
+                            try {
+                                const sec = parseFloat(f.timestamp.split(' ')[0].replace('s', ''));
+                                const idx = Math.min(Math.floor(sec / bucketSize), bucketCount - 1);
+                                if (idx >= 0) buckets[idx]++;
+                            } catch (e) {}
+                        }
+                    });
+
+                    const labels = buckets.map((_, i) => {
+                        const sec = Math.round(i * bucketSize);
+                        const m = Math.floor(sec / 60);
+                        const s = sec % 60;
+                        return m + ':' + (s < 10 ? '0' : '') + s;
+                    });
+
+                    this.charts.timeline = new Chart(timelineCtx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Incidents',
+                                data: buckets,
+                                borderColor: '#2563EB',
+                                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 3,
+                                pointBackgroundColor: '#2563EB'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor }, grid: { color: gridColor } },
+                                x: { ticks: { color: textColor, maxRotation: 45 }, grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+
+                // --- Emotion Radar ---
+                const emotionCtx = document.getElementById('chart-emotion');
+                if (emotionCtx) {
+                    const emotionMap = {};
+                    (findings.emotional_analysis || []).forEach(e => {
+                        const emo = e.detected_emotion || 'unknown';
+                        emotionMap[emo] = (emotionMap[emo] || 0) + 1;
+                    });
+                    const emotionLabels = Object.keys(emotionMap);
+                    const emotionData = Object.values(emotionMap);
+
+                    if (emotionLabels.length > 0) {
+                        this.charts.emotion = new Chart(emotionCtx, {
+                            type: 'radar',
+                            data: {
+                                labels: emotionLabels,
+                                datasets: [{
+                                    label: 'Frequency',
+                                    data: emotionData,
+                                    backgroundColor: 'rgba(249, 115, 22, 0.2)',
+                                    borderColor: '#F97316',
+                                    pointBackgroundColor: '#F97316',
+                                    borderWidth: 2
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    r: {
+                                        beginAtZero: true,
+                                        ticks: { stepSize: 1, color: textColor, backdropColor: 'transparent' },
+                                        grid: { color: gridColor },
+                                        pointLabels: { color: textColor }
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        // Show placeholder text
+                        const ctx2d = emotionCtx.getContext('2d');
+                        ctx2d.font = '14px Inter, sans-serif';
+                        ctx2d.fillStyle = textColor;
+                        ctx2d.textAlign = 'center';
+                        ctx2d.fillText('No emotion data available', emotionCtx.width / 2, emotionCtx.height / 2);
                     }
                 }
-                return null;
             }
-            
-            if (findings.emotional_analysis && findings.emotional_analysis.length > 0) {
-                html += '<h3>ניתוח רגשי</h3>';
-                findings.emotional_analysis.forEach(emotion => {
-                    const clip = findClip('emotion', emotion.timestamp);
-                    html += `<div class="finding">
-                        <strong>${emotion.timestamp}</strong> - ${emotion.detected_emotion} (${emotion.severity})
-                        ${clip ? `<div class="audio-player">
-                            <p><strong>🎵 האזן לאירוע:</strong></p>
-                            <audio controls>
-                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
-                                הדפדפן שלך לא תומך בנגן אודיו
-                            </audio>
-                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
-                        </div>` : ''}
-                    </div>`;
-                });
+        };
+    }
+
+    /* ========================================
+       Modal Manager
+       ======================================== */
+    function modalManager() {
+        return {
+            modalOpen: false,
+            reportData: null,
+            reportFilename: null,
+
+            openModal(detail) {
+                this.reportData = detail.report;
+                this.reportFilename = detail.filename;
+                this.modalOpen = true;
+                document.body.style.overflow = 'hidden';
+            },
+
+            closeModal() {
+                this.modalOpen = false;
+                this.reportData = null;
+                this.reportFilename = null;
+                document.body.style.overflow = '';
             }
-            
-            if (findings.violence_analysis && findings.violence_analysis.length > 0) {
-                html += '<h3>ניתוח אלימות</h3>';
-                findings.violence_analysis.forEach(violence => {
-                    const clip = findClip('violence', violence.timestamp);
-                    html += `<div class="finding">
-                        <strong>${violence.timestamp}</strong> - ${violence.violence_types} (${violence.severity})
-                        ${clip ? `<div class="audio-player">
-                            <p><strong>🎵 האזן לאירוע:</strong></p>
-                            <audio controls>
-                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
-                                הדפדפן שלך לא תומך בנגן אודיו
-                            </audio>
-                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
-                        </div>` : ''}
-                    </div>`;
-                });
-            }
-            
-            if (findings.cry_analysis && findings.cry_analysis.length > 0) {
-                html += '<h3>ניתוח בכי</h3>';
-                findings.cry_analysis.forEach(cry => {
-                    const clip = findClip('cry', cry.timestamp);
-                    html += `<div class="finding">
-                        <strong>${cry.timestamp}</strong> - ${cry.description}
-                        ${clip ? `<div class="audio-player">
-                            <p><strong>🎵 האזן לאירוע:</strong></p>
-                            <audio controls>
-                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
-                                הדפדפן שלך לא תומך בנגן אודיו
-                            </audio>
-                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
-                        </div>` : ''}
-                    </div>`;
-                });
-            }
-            
-            if (findings.neglect_analysis && findings.neglect_analysis.length > 0) {
-                html += '<h3>ניתוח הזנחה</h3>';
-                findings.neglect_analysis.forEach(neglect => {
-                    const clip = findClip('neglect', neglect.timestamp);
-                    html += `<div class="finding">
-                        <strong>${neglect.timestamp}</strong> - ${neglect.description}
-                        ${clip ? `<div class="audio-player">
-                            <p><strong>🎵 האזן לאירוע:</strong></p>
-                            <audio controls>
-                                <source src="/audio_clip/${clip.filename}" type="audio/wav">
-                                הדפדפן שלך לא תומך בנגן אודיו
-                            </audio>
-                            <p><small>משך: ${clip.duration.toFixed(1)} שניות</small></p>
-                        </div>` : ''}
-                    </div>`;
-                });
-            }
-            
-            return html;
-        }
-        
-        
-        // Load reports on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            loadReports();
-        });
+        };
+    }
     </script>
+
+    <!-- External static JS files -->
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/upload.js"></script>
+    <script src="/static/js/waveform.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/modal.js"></script>
 </body>
 </html>
-    

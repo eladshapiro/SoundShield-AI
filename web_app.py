@@ -2,15 +2,24 @@
 Web Application for Kindergarten Recording Analyzer
 """
 
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, Response
 from flask_cors import CORS
 import os
 import json
 import time
+import queue
+from concurrent.futures import ThreadPoolExecutor
 from werkzeug.utils import secure_filename
 from main import KindergartenRecordingAnalyzer
 
-app = Flask(__name__)
+# Import database
+try:
+    from database import Database
+    db = Database()
+except ImportError:
+    db = None
+
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS(app)
 
 # Configuration
@@ -26,12 +35,19 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['REPORTS_FOLDER'] = REPORTS_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 
+# Thread pool for async analysis
+executor = ThreadPoolExecutor(max_workers=2)
+
 # Initialize analyzer
 analyzer = None
 
 # Progress tracking - use dictionary to support multiple concurrent analyses
 # Key: filename, Value: progress dict
 progress_tracking = {}
+# SSE event queues per filename
+sse_queues = {}
+# Async job results
+job_results = {}
 # Default progress for backward compatibility
 current_progress = {
     'status': 'idle',
@@ -49,7 +65,7 @@ def safe_print(msg):
 
 def update_progress(status, message, step=None, filename=None):
     """Update progress status for a specific analysis
-    
+
     Args:
         status: Progress status
         message: Progress message
@@ -57,7 +73,7 @@ def update_progress(status, message, step=None, filename=None):
         filename: Optional filename to track progress per analysis
     """
     global current_progress, progress_tracking
-    
+
     if filename:
         # Use per-analysis progress tracking
         if filename not in progress_tracking:
@@ -67,12 +83,26 @@ def update_progress(status, message, step=None, filename=None):
                 'step': 0,
                 'total_steps': 7
             }
-        
+
         progress_tracking[filename]['status'] = status
         progress_tracking[filename]['message'] = message
         if step is not None:
             progress_tracking[filename]['step'] = step
-        
+
+        # Push SSE event
+        if filename in sse_queues:
+            event_data = {
+                'status': status,
+                'message': message,
+                'step': step or progress_tracking[filename].get('step', 0),
+                'total_steps': 7
+            }
+            for q in sse_queues[filename]:
+                try:
+                    q.put_nowait(event_data)
+                except queue.Full:
+                    pass
+
         # Also update global for backward compatibility (latest analysis)
         current_progress['status'] = status
         current_progress['message'] = message
@@ -84,7 +114,7 @@ def update_progress(status, message, step=None, filename=None):
         current_progress['message'] = message
         if step is not None:
             current_progress['step'] = step
-    
+
     # Print to both stdout and stderr to ensure visibility
     msg = f"Progress: {status} - {message}"
     safe_print(msg)
@@ -202,6 +232,44 @@ def run_analysis_with_progress(analyzer, file_path, language, progress_callback)
     progress_callback(7, lang_dict['generating_report'])
     safe_print(f"🔄 {lang_dict['generating_report']}")
     
+    # Speaker diarization
+    diarization_results = {}
+    if hasattr(analyzer, 'speaker_diarizer') and analyzer.speaker_diarizer:
+        try:
+            speaker_segments = analyzer.speaker_diarizer.get_speaker_segments(file_path)
+            diarization_results = analyzer.speaker_diarizer.get_summary(speaker_segments)
+            diarization_results['segments'] = speaker_segments
+            safe_print(f"Diarization: {diarization_results.get('speaker_count', 0)} speakers")
+        except Exception as e:
+            safe_print(f"Diarization error: {e}")
+
+    # Track which models were used
+    models_used = []
+    hubert_used = (analyzer.advanced_analyzer and
+                   hasattr(analyzer.advanced_analyzer, 'hubert_loaded') and
+                   analyzer.advanced_analyzer.hubert_loaded)
+    if hubert_used:
+        models_used.append('hubert')
+    if analyzer.advanced_analyzer and hasattr(analyzer.advanced_analyzer, 'whisper_loaded') and analyzer.advanced_analyzer.whisper_loaded:
+        models_used.append('whisper')
+    if hasattr(analyzer, 'speaker_diarizer') and analyzer.speaker_diarizer:
+        models_used.append('diarizer')
+
+    # Use HuBERT as primary for emotions when available
+    if hubert_used:
+        try:
+            advanced_emotions = analyzer.advanced_analyzer.detect_concerning_emotions_advanced(file_path)
+            if advanced_emotions:
+                concerning_emotions = analyzer.emotion_detector.merge_with_advanced_results(
+                    concerning_emotions, advanced_emotions
+                )
+                safe_print(f"HuBERT merged {len(advanced_emotions)} emotion detections")
+        except Exception as e:
+            safe_print(f"HuBERT emotion merge error: {e}")
+    else:
+        for e in concerning_emotions:
+            e['ml_backed'] = False
+
     # Compile results
     analysis_results = {
         'file_path': file_path,
@@ -214,7 +282,9 @@ def run_analysis_with_progress(analyzer, file_path, language, progress_callback)
         'violence_segments': violence_segments,
         'neglect_analysis': neglect_analysis,
         'advanced_analysis': advanced_analysis,
+        'diarization': diarization_results,
         'inappropriate_language': inappropriate_language,
+        'models_used': models_used,
         'analysis_timestamp': time.time(),
         'language': language
     }
@@ -293,10 +363,24 @@ def upload_file():
             results = run_analysis_with_progress(analyzer, filepath, language, progress_callback)
             
             # Mark as completed
-            update_progress('completed', 'ניתוח הושלם בהצלחה! / Analysis completed successfully!', 7, filename=filename)
-            
-            # Clean up progress tracking after a delay (keep for 5 minutes for UI polling)
-            # Note: In production, consider using a background task to clean up old entries
+            update_progress('completed', 'Analysis completed successfully!', 7, filename=filename)
+
+            # Save to database
+            if db:
+                try:
+                    original_name = '_'.join(filename.split('_')[1:])
+                    models = ', '.join(results.get('models_used', []))
+                    db.save_analysis(
+                        filename=filename,
+                        original_filename=original_name,
+                        analysis_results=results,
+                        report=results.get('report', {}),
+                        models_used=models
+                    )
+                except Exception as e:
+                    safe_print(f"Database save error: {e}")
+
+            # Clean up progress tracking after a delay
             import threading
             def cleanup_progress():
                 import time
@@ -304,7 +388,7 @@ def upload_file():
                 if filename in progress_tracking:
                     del progress_tracking[filename]
             threading.Thread(target=cleanup_progress, daemon=True).start()
-            
+
             # Return results including inappropriate language
             inappropriate_lang = results.get('inappropriate_language', {})
             inappropriate_words_list = []
@@ -312,6 +396,48 @@ def upload_file():
                 for severity, words in inappropriate_lang['words_by_severity'].items():
                     inappropriate_words_list.extend(words)
             
+            # Include audio clips from the report
+            audio_clips = results.get('report', {}).get('audio_clips', [])
+
+            # Collect all incidents with timing for waveform overlays
+            all_incidents = []
+            for e in results.get('concerning_emotions', []):
+                all_incidents.append({
+                    'type': 'emotion',
+                    'start_time': e.get('start_time', 0),
+                    'end_time': e.get('end_time', 0),
+                    'severity': e.get('severity', 'low'),
+                    'label': e.get('detected_emotion', ''),
+                    'confidence': e.get('confidence', 0),
+                    'ml_backed': e.get('ml_backed', False),
+                })
+            for v in results.get('violence_segments', []):
+                all_incidents.append({
+                    'type': 'violence',
+                    'start_time': v.get('start_time', 0),
+                    'end_time': v.get('end_time', 0),
+                    'severity': v.get('adjusted_severity', 'low'),
+                    'label': ', '.join(v.get('violence_types', [])),
+                    'confidence': v.get('confidence', 0),
+                })
+            for c in results.get('cry_with_responses', []):
+                all_incidents.append({
+                    'type': 'cry',
+                    'start_time': c.get('start_time', 0),
+                    'end_time': c.get('end_time', 0),
+                    'severity': c.get('intensity', 'medium'),
+                    'label': 'response' if c.get('response_detected') else 'no_response',
+                })
+            neglect_a = results.get('neglect_analysis', {})
+            for n in neglect_a.get('unanswered_cries', []):
+                all_incidents.append({
+                    'type': 'neglect',
+                    'start_time': n.get('cry_start_time', 0),
+                    'end_time': n.get('cry_end_time', 0),
+                    'severity': n.get('neglect_severity', 'medium'),
+                    'label': 'unanswered_cry',
+                })
+
             return jsonify({
                 'success': True,
                 'message': 'Analysis completed successfully',
@@ -319,8 +445,14 @@ def upload_file():
                 'results': {
                     'summary': results['report']['summary'],
                     'statistics': results['report']['statistics'],
-                    'detailed_findings': results['report'].get('detailed_findings', {})
+                    'detailed_findings': results['report'].get('detailed_findings', {}),
+                    'metadata': results['report'].get('metadata', {}),
                 },
+                'incidents': all_incidents,
+                'duration': results.get('duration', 0),
+                'models_used': results.get('models_used', []),
+                'audio_clips': audio_clips,
+                'diarization': results.get('diarization', {}),
                 'inappropriate_language': {
                     'detected_inappropriate_words': inappropriate_lang.get('detected_inappropriate_words', 0),
                     'words_by_severity': inappropriate_lang.get('words_by_severity', {}),
@@ -462,6 +594,240 @@ def health_check():
         'status': 'healthy',
         'timestamp': time.time(),
         'analyzer_initialized': analyzer is not None
+    })
+
+
+@app.route('/progress-stream/<filename>')
+def progress_stream(filename):
+    """Server-Sent Events endpoint for real-time progress updates."""
+    def event_generator():
+        q = queue.Queue(maxsize=100)
+        # Register this client's queue
+        if filename not in sse_queues:
+            sse_queues[filename] = []
+        sse_queues[filename].append(q)
+
+        try:
+            # Send current state immediately
+            if filename in progress_tracking:
+                data = json.dumps(progress_tracking[filename])
+                yield f"event: progress\ndata: {data}\n\n"
+
+            while True:
+                try:
+                    event_data = q.get(timeout=30)
+                    data = json.dumps(event_data)
+
+                    if event_data.get('status') == 'completed':
+                        yield f"event: complete\ndata: {data}\n\n"
+                        break
+                    elif event_data.get('status') == 'error':
+                        yield f"event: error\ndata: {data}\n\n"
+                        break
+                    else:
+                        yield f"event: progress\ndata: {data}\n\n"
+                except queue.Empty:
+                    # Send keepalive
+                    yield f": keepalive\n\n"
+        finally:
+            # Cleanup
+            if filename in sse_queues and q in sse_queues[filename]:
+                sse_queues[filename].remove(q)
+                if not sse_queues[filename]:
+                    del sse_queues[filename]
+
+    return Response(
+        event_generator(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        }
+    )
+
+
+@app.route('/uploaded-audio/<filename>')
+def serve_uploaded_audio(filename):
+    """Serve uploaded audio files for waveform visualization."""
+    try:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(filepath):
+            mimetype = 'audio/wav'
+            if filename.endswith('.mp3'):
+                mimetype = 'audio/mpeg'
+            elif filename.endswith('.ogg'):
+                mimetype = 'audio/ogg'
+            elif filename.endswith('.flac'):
+                mimetype = 'audio/flac'
+            elif filename.endswith('.m4a'):
+                mimetype = 'audio/mp4'
+            return send_file(filepath, mimetype=mimetype)
+        return jsonify({'error': 'Audio file not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/upload-async', methods=['POST'])
+def upload_file_async():
+    """Handle file upload and start async analysis. Returns job_id immediately."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file selected'}), 400
+
+        file = request.files['file']
+        language = request.form.get('language', 'en')
+
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            timestamp = int(time.time())
+            filename = f"{timestamp}_{filename}"
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+
+            # Initialize progress tracking
+            progress_tracking[filename] = {
+                'status': 'analyzing',
+                'message': 'Starting analysis...',
+                'step': 0,
+                'total_steps': 7
+            }
+
+            # Start async analysis
+            future = executor.submit(
+                _run_analysis_async, filepath, filename, language
+            )
+            job_results[filename] = {'future': future, 'status': 'running'}
+
+            return jsonify({
+                'success': True,
+                'job_id': filename,
+                'message': 'Analysis started'
+            })
+        else:
+            return jsonify({'error': 'File type not supported'}), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _run_analysis_async(filepath, filename, language):
+    """Run analysis in background thread."""
+    global analyzer
+    try:
+        if analyzer is None:
+            update_progress('initializing', 'Initializing system...', 0, filename=filename)
+            analyzer = KindergartenRecordingAnalyzer(language=language)
+        else:
+            analyzer.language = language
+
+        def progress_callback(step, message):
+            update_progress('analyzing', message, step, filename=filename)
+
+        results = run_analysis_with_progress(analyzer, filepath, language, progress_callback)
+
+        # Save to database
+        if db:
+            try:
+                original_name = '_'.join(filename.split('_')[1:])
+                models = ', '.join(results.get('models_used', []))
+                db.save_analysis(
+                    filename=filename,
+                    original_filename=original_name,
+                    analysis_results=results,
+                    report=results.get('report', {}),
+                    models_used=models
+                )
+            except Exception as e:
+                safe_print(f"Database save error: {e}")
+
+        update_progress('completed', 'Analysis completed!', 7, filename=filename)
+        job_results[filename] = {'status': 'completed', 'results': results}
+        return results
+
+    except Exception as e:
+        update_progress('error', str(e), filename=filename)
+        job_results[filename] = {'status': 'error', 'error': str(e)}
+        raise
+
+
+@app.route('/job-status/<job_id>')
+def job_status(job_id):
+    """Check status of an async analysis job."""
+    if job_id not in job_results:
+        return jsonify({'error': 'Job not found'}), 404
+
+    job = job_results[job_id]
+    if job['status'] == 'completed':
+        results = job.get('results', {})
+        inappropriate_lang = results.get('inappropriate_language', {})
+        return jsonify({
+            'status': 'completed',
+            'results': {
+                'summary': results.get('report', {}).get('summary', {}),
+                'statistics': results.get('report', {}).get('statistics', {}),
+                'detailed_findings': results.get('report', {}).get('detailed_findings', {}),
+            },
+            'filename': job_id,
+            'inappropriate_language': {
+                'detected_inappropriate_words': inappropriate_lang.get('detected_inappropriate_words', 0),
+            } if inappropriate_lang else None
+        })
+    elif job['status'] == 'error':
+        return jsonify({'status': 'error', 'error': job.get('error', 'Unknown error')})
+    else:
+        return jsonify({'status': 'running', 'progress': progress_tracking.get(job_id, {})})
+
+
+@app.route('/compare')
+def compare_analyses():
+    """Compare multiple analyses side by side. Usage: /compare?ids=1,2,3"""
+    if not db:
+        return jsonify({'error': 'Database not available'}), 500
+
+    ids_param = request.args.get('ids', '')
+    try:
+        analysis_ids = [int(x) for x in ids_param.split(',') if x.strip()]
+    except ValueError:
+        return jsonify({'error': 'Invalid IDs format'}), 400
+
+    if not analysis_ids:
+        return jsonify({'error': 'No IDs provided'}), 400
+
+    data = db.get_comparison_data(analysis_ids)
+    return jsonify({'success': True, 'analyses': data})
+
+
+@app.route('/history')
+def analysis_history():
+    """Get analysis history from database."""
+    if not db:
+        return jsonify({'success': True, 'history': []})
+
+    limit = request.args.get('limit', 50, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    history = db.get_analysis_history(limit=limit, offset=offset)
+    return jsonify({'success': True, 'history': history})
+
+
+@app.route('/analysis/<int:analysis_id>')
+def get_analysis_by_id(analysis_id):
+    """Get a specific analysis from database."""
+    if not db:
+        return jsonify({'error': 'Database not available'}), 500
+
+    analysis = db.get_analysis(analysis_id)
+    if not analysis:
+        return jsonify({'error': 'Analysis not found'}), 404
+
+    incidents = db.get_incidents(analysis_id)
+    return jsonify({
+        'success': True,
+        'analysis': analysis,
+        'incidents': incidents
     })
 
 def create_html_template():
@@ -1317,19 +1683,18 @@ def create_html_template():
         f.write(html_content)
 
 if __name__ == '__main__':
-    print("מאתחל אפליקציית ווב...")
     print("Initializing web application...")
-    
+
     # Create templates directory if it doesn't exist
     templates_dir = 'templates'
     os.makedirs(templates_dir, exist_ok=True)
-    
-    # Create basic HTML template
-    create_html_template()
-    
-    print("אפליקציית ווב מוכנה!")
+
+    # Only create legacy template if the new dashboard doesn't exist
+    template_path = os.path.join(templates_dir, 'index.html')
+    if not os.path.exists(template_path):
+        create_html_template()
+
     print("Web application ready!")
-    print("פתח בדפדפן: http://localhost:5000")
     print("Open in browser: http://localhost:5000")
-    
+
     app.run(debug=True, host='0.0.0.0', port=5000)

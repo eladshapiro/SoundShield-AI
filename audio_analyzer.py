@@ -15,11 +15,12 @@ class AudioAnalyzer:
         """
         Initialize Audio Analyzer
         אתחול מנתח האודיו
-        
+
         Args:
             sample_rate: Sample rate for audio processing
         """
         self.sample_rate = sample_rate
+        self.noise_baseline = None
         
     def load_audio(self, file_path: str) -> Tuple[np.ndarray, int]:
         """
@@ -78,6 +79,46 @@ class AudioAnalyzer:
         
         return features
     
+    def calibrate_noise_baseline(self, audio: np.ndarray, sr: int,
+                                  calibration_seconds: float = 30.0) -> Dict:
+        """Analyze first N seconds to establish ambient noise floor.
+
+        All energy thresholds are adjusted relative to this baseline.
+
+        Args:
+            audio: Full audio data
+            sr: Sample rate
+            calibration_seconds: How many seconds to use for calibration
+
+        Returns:
+            Dict with baseline metrics: mean_rms, std_rms, silence_threshold,
+            loud_threshold, noise_floor_db
+        """
+        cal_samples = min(int(calibration_seconds * sr), len(audio))
+        cal_audio = audio[:cal_samples]
+
+        rms = librosa.feature.rms(y=cal_audio)[0]
+        mean_rms = float(np.mean(rms))
+        std_rms = float(np.std(rms))
+
+        # Adaptive thresholds based on ambient noise
+        silence_threshold = max(0.005, mean_rms * 0.5)
+        loud_threshold = max(0.1, mean_rms + 3 * std_rms)
+
+        # Noise floor in dB
+        noise_floor_db = float(20 * np.log10(mean_rms + 1e-10))
+
+        self.noise_baseline = {
+            'mean_rms': mean_rms,
+            'std_rms': std_rms,
+            'silence_threshold': silence_threshold,
+            'loud_threshold': loud_threshold,
+            'noise_floor_db': noise_floor_db,
+            'calibration_seconds': float(cal_samples / sr)
+        }
+
+        return self.noise_baseline
+
     def detect_silence(self, audio: np.ndarray, threshold: float = 0.01) -> List[Tuple[float, float]]:
         """
         Detect silent segments in audio
@@ -191,19 +232,24 @@ class AudioAnalyzer:
         """
         print(f"Loading audio file: {file_path}")
         audio, sr = self.load_audio(file_path)
-        
+
+        print("Calibrating noise baseline...")
+        baseline = self.calibrate_noise_baseline(audio, sr)
+        silence_thresh = baseline['silence_threshold']
+        loud_thresh = baseline['loud_threshold']
+
         print("Extracting features...")
         features = self.extract_features(audio, sr)
-        
+
         print("Detecting silence...")
-        silent_segments = self.detect_silence(audio)
-        
+        silent_segments = self.detect_silence(audio, threshold=silence_thresh)
+
         print("Detecting loud segments...")
-        loud_segments = self.detect_loud_segments(audio)
-        
+        loud_segments = self.detect_loud_segments(audio, threshold=loud_thresh)
+
         print("Segmenting audio...")
         segments = self.segment_audio(audio)
-        
+
         analysis_result = {
             'file_path': file_path,
             'duration': features['duration'],
@@ -212,12 +258,14 @@ class AudioAnalyzer:
             'loud_segments': loud_segments,
             'num_segments': len(segments),
             'segments': segments,
-            'sample_rate': sr
+            'sample_rate': sr,
+            'noise_baseline': baseline
         }
-        
+
         print(f"Analysis complete. Duration: {features['duration']:.2f} seconds")
+        print(f"Noise floor: {baseline['noise_floor_db']:.1f} dB")
         print(f"Found {len(silent_segments)} silent segments and {len(loud_segments)} loud segments")
-        
+
         return analysis_result
 
 if __name__ == "__main__":

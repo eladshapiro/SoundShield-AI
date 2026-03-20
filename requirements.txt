@@ -39,8 +39,8 @@ Pillow>=10.0.0
 # Optional Hebrew language support (if available)
 # hebpipe>=1.0.0
 
-# Advanced Models (Optional but Recommended)
-# openai-whisper>=20231117  # For transcription (REQUIRES FFmpeg - see INSTALL_FFMPEG.md)
-# transformers>=4.30.0  # For emotion detection
-# pyannote.audio>=3.1.0  # For speaker diarization
-# torch>=2.0.0  # Required for transformers
+# Advanced Models (Primary - used by default)
+openai-whisper>=20231117  # For transcription (REQUIRES FFmpeg - see INSTALL_FFMPEG.md)
+# transformers>=4.30.0  # Already listed above
+pyannote.audio>=3.1.0  # For speaker diarization
+# torch>=2.0.0  # Already listed above

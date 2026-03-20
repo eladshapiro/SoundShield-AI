@@ -12,11 +12,19 @@ class AdvancedAnalyzer:
     """
     Advanced analyzer using best-in-class models
     """
-    
+
+    # HuBERT emotion label mapping to severity schema
+    HUBERT_LABEL_MAP = {
+        'ang': {'emotion': 'anger', 'base_severity': 'high'},
+        'hap': {'emotion': 'calm', 'base_severity': 'low'},
+        'sad': {'emotion': 'stress', 'base_severity': 'medium'},
+        'neu': {'emotion': 'calm', 'base_severity': 'low'},
+    }
+
     def __init__(self, use_whisper: bool = True, use_transformer_emotion: bool = True):
         """
         Initialize advanced analyzer
-        
+
         Args:
             use_whisper: Use Whisper for transcription
             use_transformer_emotion: Use Transformers for emotion detection
@@ -26,7 +34,9 @@ class AdvancedAnalyzer:
         self.whisper_model = None
         self.emotion_model = None
         self.models_loaded = False
-        
+        self.whisper_loaded = False
+        self.hubert_loaded = False
+
         print("Initializing Advanced Analyzer...")
         
     def load_models(self):
@@ -37,6 +47,7 @@ class AdvancedAnalyzer:
                     import whisper
                     print("  Loading Whisper...")
                     self.whisper_model = whisper.load_model("base")
+                    self.whisper_loaded = True
                     print("  ✅ Whisper loaded successfully")
                 except ImportError:
                     print("  ⚠️ Whisper not installed - skipping")
@@ -44,24 +55,25 @@ class AdvancedAnalyzer:
                 except Exception as e:
                     print(f"  ⚠️ Error loading Whisper: {e}")
                     self.use_whisper = False
-            
+
             if self.use_transformer_emotion:
                 try:
                     from transformers import pipeline
                     import torch
-                    print("  Loading Transformers Emotion...")
+                    print("  Loading HuBERT Emotion Model...")
                     self.emotion_model = pipeline(
                         "audio-classification",
                         model="superb/hubert-large-superb-er",
                         device=-1  # CPU mode
                     )
-                    print("  ✅ Transformers Emotion loaded successfully")
+                    self.hubert_loaded = True
+                    print("  ✅ HuBERT Emotion loaded successfully")
                 except Exception as e:
-                    print(f"  ⚠️ Transformers Emotion not available: {e}")
+                    print(f"  ⚠️ HuBERT Emotion not available: {e}")
                     self.use_transformer_emotion = False
-            
-            self.models_loaded = True
-            print("✅ All models loaded")
+
+            self.models_loaded = self.whisper_loaded or self.hubert_loaded
+            print(f"✅ Models loaded (whisper={self.whisper_loaded}, hubert={self.hubert_loaded})")
             
         except Exception as e:
             print(f"Error loading models: {e}")
@@ -248,6 +260,100 @@ class AdvancedAnalyzer:
             print(f"Error in advanced emotion analysis: {e}")
             return {'error': str(e)}
     
+    def detect_concerning_emotions_advanced(self, audio_file: str) -> List[Dict]:
+        """
+        Detect concerning emotions using HuBERT in 5-10s chunks.
+        Returns results in the same schema as EmotionDetector.detect_concerning_emotions().
+
+        Each result dict has:
+            segment_index, start_time, end_time, detected_emotion, confidence,
+            severity, all_scores, ml_backed
+        """
+        if not self.hubert_loaded or not self.emotion_model:
+            return []
+
+        try:
+            import os
+            audio_path = os.path.abspath(audio_file)
+            if not os.path.exists(audio_path):
+                return []
+
+            audio, sr = librosa.load(audio_path, sr=16000)
+
+            chunk_duration = 7  # seconds (between 5-10s)
+            chunk_samples = chunk_duration * sr
+            chunks = [audio[i:i + chunk_samples]
+                      for i in range(0, len(audio), chunk_samples)]
+
+            concerning = ['anger', 'stress', 'aggression']
+            results = []
+
+            for i, chunk in enumerate(chunks):
+                if len(chunk) < sr * 0.5:  # skip very short chunks
+                    continue
+                try:
+                    predictions = self.emotion_model(chunk)
+                    if not isinstance(predictions, list):
+                        continue
+
+                    # Map HuBERT labels to our schema
+                    all_scores = {}
+                    primary_emotion = 'calm'
+                    primary_score = 0.0
+
+                    for pred in predictions:
+                        label = pred.get('label', '').lower()
+                        score = pred.get('score', 0.0)
+                        mapped = self.HUBERT_LABEL_MAP.get(label)
+                        if mapped:
+                            emotion_name = mapped['emotion']
+                            all_scores[emotion_name] = max(
+                                all_scores.get(emotion_name, 0.0), score
+                            )
+                            if score > primary_score:
+                                primary_score = score
+                                primary_emotion = emotion_name
+
+                    start_time = i * chunk_duration
+                    end_time = min((i + 1) * chunk_duration, len(audio) / sr)
+
+                    if primary_emotion in concerning and primary_score > 0.5:
+                        severity = self._map_severity(primary_emotion, primary_score)
+                        results.append({
+                            'segment_index': i,
+                            'start_time': float(start_time),
+                            'end_time': float(end_time),
+                            'detected_emotion': primary_emotion,
+                            'confidence': float(primary_score),
+                            'severity': severity,
+                            'all_scores': all_scores,
+                            'ml_backed': True
+                        })
+                except Exception:
+                    continue
+
+            return results
+
+        except Exception as e:
+            print(f"Error in detect_concerning_emotions_advanced: {e}")
+            return []
+
+    def _map_severity(self, emotion: str, confidence: float) -> str:
+        """Map emotion + confidence to severity level."""
+        base_map = {
+            'anger': 'medium',
+            'stress': 'low',
+            'aggression': 'high',
+        }
+        severity_upgrade = {
+            'low': ['low', 'medium'],
+            'medium': ['medium', 'high'],
+            'high': ['high', 'critical'],
+        }
+        base = base_map.get(emotion, 'low')
+        levels = severity_upgrade.get(base, ['low', 'medium'])
+        return levels[1] if confidence > 0.8 else levels[0]
+
     def comprehensive_analysis(self, audio_file: str, language: str = 'en') -> Dict:
         """
         Perform comprehensive analysis using all advanced models

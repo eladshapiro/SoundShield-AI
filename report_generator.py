@@ -196,13 +196,23 @@ class ReportGenerator:
         """
         timestamp = datetime.now()
         
+        # Enhanced metadata - which models were used, diarization summary
+        models_used = analysis_results.get('models_used', [])
+        diarization = analysis_results.get('diarization', {})
+
         report = {
             'metadata': {
                 'file_path': audio_file_path,
                 'file_name': os.path.basename(audio_file_path),
                 'analysis_timestamp': timestamp.isoformat(),
                 'analysis_date_hebrew': self._format_hebrew_date(timestamp),
-                'audio_duration': analysis_results.get('duration', 0)
+                'audio_duration': analysis_results.get('duration', 0),
+                'models_used': models_used,
+                'diarization_summary': {
+                    'speaker_count': diarization.get('speaker_count', 0),
+                    'adult_count': diarization.get('adult_count', 0),
+                    'child_count': diarization.get('child_count', 0),
+                } if diarization else None
             },
             'summary': self._generate_summary(analysis_results),
             'detailed_findings': self._generate_detailed_findings(analysis_results),
@@ -305,20 +315,39 @@ class ReportGenerator:
         if critical_inappropriate > 0:
             critical_count += critical_inappropriate
         
-        # Determine overall assessment
-        if critical_count > 0 or critical_inappropriate > 0:
+        # Confidence-weighted severity aggregation
+        # Each detection contributes severity_weight * confidence
+        # ML-backed detections: weight 1.0; heuristic-only: weight 0.6
+        weighted_score = 0.0
+        severity_weights = {'low': 0.2, 'medium': 0.5, 'high': 0.8, 'critical': 1.0}
+
+        for emotion in analysis_results.get('concerning_emotions', []):
+            sev = emotion.get('severity', 'low')
+            conf = emotion.get('confidence', 0.5)
+            ml_weight = 1.0 if emotion.get('ml_backed', False) else 0.6
+            weighted_score += severity_weights.get(sev, 0.2) * conf * ml_weight
+
+        for violence in analysis_results.get('violence_segments', []):
+            sev = violence.get('adjusted_severity', 'low')
+            conf = violence.get('confidence', 0.5)
+            weighted_score += severity_weights.get(sev, 0.2) * conf * 0.6
+
+        # Determine overall assessment using weighted scoring
+        if critical_count > 0 or critical_inappropriate > 0 or weighted_score > 3.0:
             summary['overall_assessment'] = 'critical'
             summary['risk_level'] = 'critical'
-        elif summary['total_incidents'] > 5 or high_inappropriate > 2:
+        elif weighted_score > 1.5 or high_inappropriate > 2:
             summary['overall_assessment'] = 'concerning'
             summary['risk_level'] = 'high'
-        elif summary['total_incidents'] > 2:
+        elif weighted_score > 0.5 or summary['total_incidents'] > 2:
             summary['overall_assessment'] = 'moderate'
             summary['risk_level'] = 'medium'
         else:
             summary['overall_assessment'] = 'normal'
             summary['risk_level'] = 'low'
-        
+
+        summary['weighted_severity_score'] = round(weighted_score, 3)
+
         return summary
     
     def _generate_detailed_findings(self, analysis_results: Dict) -> Dict:
@@ -498,7 +527,49 @@ class ReportGenerator:
         for violence in analysis_results.get('violence_segments', []):
             severity = violence.get('adjusted_severity', 'low')
             stats['severity_distribution'][severity] += 1
-        
+
+        # Confidence distribution
+        confidences = []
+        for e in analysis_results.get('concerning_emotions', []):
+            confidences.append(e.get('confidence', 0))
+        for v in analysis_results.get('violence_segments', []):
+            confidences.append(v.get('confidence', 0))
+        stats['confidence_distribution'] = {
+            'mean': float(np.mean(confidences)) if confidences else 0.0,
+            'min': float(min(confidences)) if confidences else 0.0,
+            'max': float(max(confidences)) if confidences else 0.0,
+        }
+
+        # Incident type breakdown
+        stats['incident_types'] = {
+            'emotion': len(analysis_results.get('concerning_emotions', [])),
+            'violence': len(analysis_results.get('violence_segments', [])),
+            'cry': len(analysis_results.get('cry_with_responses', [])),
+            'neglect': len(analysis_results.get('neglect_analysis', {}).get('unanswered_cries', [])),
+            'language': analysis_results.get('inappropriate_language', {}).get('detected_inappropriate_words', 0),
+        }
+
+        # Timeline data - incidents by minute for timeline charts
+        timeline = {}
+        duration_minutes = int(stats['audio_duration_minutes']) + 1
+        for m in range(duration_minutes):
+            timeline[m] = 0
+        for e in analysis_results.get('concerning_emotions', []):
+            minute = int(e.get('start_time', 0) / 60)
+            timeline[minute] = timeline.get(minute, 0) + 1
+        for v in analysis_results.get('violence_segments', []):
+            minute = int(v.get('start_time', 0) / 60)
+            timeline[minute] = timeline.get(minute, 0) + 1
+        for c in analysis_results.get('cry_with_responses', []):
+            minute = int(c.get('start_time', 0) / 60)
+            timeline[minute] = timeline.get(minute, 0) + 1
+        stats['timeline_density'] = timeline
+
+        # ML vs heuristic counts
+        ml_count = sum(1 for e in analysis_results.get('concerning_emotions', []) if e.get('ml_backed'))
+        heuristic_count = sum(1 for e in analysis_results.get('concerning_emotions', []) if not e.get('ml_backed'))
+        stats['detection_method'] = {'ml': ml_count, 'heuristic': heuristic_count}
+
         return stats
     
     def _get_emotion_description(self, emotion: Dict) -> str:
@@ -597,7 +668,23 @@ class ReportGenerator:
         logger.info(f"HTML report saved: {filepath}")
     
     def _generate_html_content(self, report: Dict) -> str:
-        """Generate HTML content for report"""
+        """Generate HTML content for report with Chart.js visualizations"""
+        # Prepare chart data as JSON for embedding
+        stats = report.get('statistics', {})
+        severity_dist = stats.get('severity_distribution', {})
+        incident_types = stats.get('incident_types', {})
+        timeline_data = stats.get('timeline_density', {})
+        detection_method = stats.get('detection_method', {})
+        models_used = report.get('metadata', {}).get('models_used', [])
+        diarization = report.get('metadata', {}).get('diarization_summary')
+
+        chart_data_json = json.dumps({
+            'severity': severity_dist,
+            'incident_types': incident_types,
+            'timeline': timeline_data,
+            'detection_method': detection_method,
+        }, ensure_ascii=False)
+
         html = f"""
 <!DOCTYPE html>
 <html dir="rtl" lang="he">
@@ -605,33 +692,36 @@ class ReportGenerator:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>דוח ניתוח הקלטות גן ילדים</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>const REPORT_CHART_DATA = {chart_data_json};</script>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
-        .container {{ max-width: 1200px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        h1 {{ color: #2c3e50; text-align: center; margin-bottom: 30px; }}
-        h2 {{ color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
-        .summary {{ background-color: #ecf0f1; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-        .critical {{ background-color: #e74c3c; color: white; }}
-        .high {{ background-color: #e67e22; color: white; }}
-        .medium {{ background-color: #f39c12; color: white; }}
-        .low {{ background-color: #27ae60; color: white; }}
-        .incident {{ background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; margin: 10px 0; border-radius: 5px; }}
-        .metadata {{ background-color: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0; }}
-        .recommendations {{ background-color: #d4edda; padding: 15px; border-radius: 5px; }}
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        h1 {{ color: #1e3a5f; text-align: center; margin-bottom: 30px; }}
+        h2 {{ color: #2c3e50; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }}
+        .summary {{ background-color: #ecf0f1; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+        .critical {{ background-color: #ef4444; color: white; }}
+        .high {{ background-color: #f97316; color: white; }}
+        .medium {{ background-color: #eab308; color: #333; }}
+        .low {{ background-color: #22c55e; color: white; }}
+        .incident {{ background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; margin: 10px 0; border-radius: 8px; }}
+        .metadata {{ background-color: #eff6ff; padding: 15px; border-radius: 8px; margin: 10px 0; }}
+        .recommendations {{ background-color: #f0fdf4; padding: 20px; border-radius: 8px; border: 1px solid #bbf7d0; }}
         ul {{ padding-right: 20px; }}
         li {{ margin: 5px 0; }}
-        .timestamp {{ font-weight: bold; color: #7f8c8d; }}
-        .audio-player {{ 
-            background-color: #f8f9fa; 
-            border: 1px solid #dee2e6; 
-            border-radius: 5px; 
-            padding: 15px; 
-            margin: 10px 0; 
-        }}
-        .audio-player audio {{ 
-            border-radius: 5px; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
-        }}
+        .timestamp {{ font-weight: bold; color: #64748b; }}
+        .audio-player {{ background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 10px 0; }}
+        .audio-player audio {{ border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+        .charts-row {{ display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }}
+        .chart-box {{ flex: 1; min-width: 280px; background: #f8fafc; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0; }}
+        .chart-box canvas {{ max-height: 250px; }}
+        .model-badge {{ display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; margin: 2px; background: #dbeafe; color: #1e40af; }}
+        .timeline-bar {{ position: relative; height: 30px; background: #e2e8f0; border-radius: 4px; margin: 15px 0; overflow: hidden; }}
+        .timeline-marker {{ position: absolute; height: 100%; min-width: 3px; top: 0; }}
+        .timeline-marker.emotion {{ background: rgba(249,115,22,0.7); }}
+        .timeline-marker.violence {{ background: rgba(239,68,68,0.8); }}
+        .timeline-marker.cry {{ background: rgba(59,130,246,0.6); }}
+        .timeline-marker.neglect {{ background: rgba(107,114,128,0.6); }}
     </style>
 </head>
 <body>
@@ -643,6 +733,8 @@ class ReportGenerator:
             <p><strong>שם הקובץ:</strong> {report['metadata']['file_name']}</p>
             <p><strong>תאריך ניתוח:</strong> {report['metadata']['analysis_date_hebrew']}</p>
             <p><strong>משך ההקלטה:</strong> {report['metadata']['audio_duration']:.1f} שניות ({report['metadata']['audio_duration']/60:.1f} דקות)</p>
+            <p><strong>מודלים בשימוש:</strong> {''.join(f'<span class="model-badge">{m}</span>' for m in models_used) if models_used else '<span class="model-badge">heuristic only</span>'}</p>
+            {'<p><strong>דיאריזציה:</strong> ' + str(diarization["speaker_count"]) + " דוברים (" + str(diarization["adult_count"]) + " מבוגרים, " + str(diarization["child_count"]) + " ילדים)</p>" if diarization else ''}
         </div>
         
         <div class="summary {report['summary']['risk_level']}">
@@ -750,20 +842,69 @@ class ReportGenerator:
                 </div>
                 """
         
+        # Timeline visualization (CSS-only bar with incident markers)
+        duration = report['metadata']['audio_duration']
+        html += '<h2>ציר זמן אירועים</h2>'
+        html += '<div class="timeline-bar">'
+        if duration > 0:
+            for e in report['detailed_findings'].get('emotional_analysis', []):
+                try:
+                    start = float(e['timestamp'].split(' - ')[0].replace('s', ''))
+                    end = float(e['timestamp'].split(' - ')[1].replace('s', ''))
+                    left = (start / duration) * 100
+                    width = max(0.5, ((end - start) / duration) * 100)
+                    html += f'<div class="timeline-marker emotion" style="left:{left:.1f}%;width:{width:.1f}%" title="Emotion: {e["detected_emotion"]}"></div>'
+                except Exception:
+                    pass
+            for v in report['detailed_findings'].get('violence_analysis', []):
+                try:
+                    start = float(v['timestamp'].split(' - ')[0].replace('s', ''))
+                    end = float(v['timestamp'].split(' - ')[1].replace('s', ''))
+                    left = (start / duration) * 100
+                    width = max(0.5, ((end - start) / duration) * 100)
+                    html += f'<div class="timeline-marker violence" style="left:{left:.1f}%;width:{width:.1f}%" title="Violence: {v["violence_types"]}"></div>'
+                except Exception:
+                    pass
+            for c in report['detailed_findings'].get('cry_analysis', []):
+                try:
+                    start = float(c['timestamp'].split(' - ')[0].replace('s', ''))
+                    end = float(c['timestamp'].split(' - ')[1].replace('s', ''))
+                    left = (start / duration) * 100
+                    width = max(0.5, ((end - start) / duration) * 100)
+                    html += f'<div class="timeline-marker cry" style="left:{left:.1f}%;width:{width:.1f}%" title="Cry"></div>'
+                except Exception:
+                    pass
+        html += '</div>'
+
+        # Chart.js visualizations
+        html += """
+        <h2>תרשימים</h2>
+        <div class="charts-row">
+            <div class="chart-box">
+                <h3>התפלגות חומרה</h3>
+                <canvas id="severityChart"></canvas>
+            </div>
+            <div class="chart-box">
+                <h3>סוגי אירועים</h3>
+                <canvas id="typeChart"></canvas>
+            </div>
+        </div>
+        """
+
         # Recommendations
         html += """
         <div class="recommendations">
             <h2>המלצות</h2>
             <ul>
         """
-        
+
         for recommendation in report['recommendations']:
             html += f"<li>{recommendation}</li>"
-        
+
         html += """
             </ul>
         </div>
-        
+
         <h2>סטטיסטיקות</h2>
         <div class="metadata">
             <p><strong>משך הקלטה:</strong> {:.1f} דקות</p>
@@ -777,10 +918,6 @@ class ReportGenerator:
                 <li>קריטית: {}</li>
             </ul>
         </div>
-        
-    </div>
-</body>
-</html>
         """.format(
             report['statistics']['audio_duration_minutes'],
             report['statistics']['total_incidents'],
@@ -790,7 +927,50 @@ class ReportGenerator:
             report['statistics']['severity_distribution']['high'],
             report['statistics']['severity_distribution']['critical']
         )
-        
+
+        # Chart.js rendering script
+        html += """
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const data = REPORT_CHART_DATA;
+        // Severity doughnut
+        if (document.getElementById('severityChart')) {
+            new Chart(document.getElementById('severityChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Low', 'Medium', 'High', 'Critical'],
+                    datasets: [{
+                        data: [data.severity.low||0, data.severity.medium||0, data.severity.high||0, data.severity.critical||0],
+                        backgroundColor: ['#22c55e', '#eab308', '#f97316', '#ef4444']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+        // Incident type bar
+        if (document.getElementById('typeChart')) {
+            const types = data.incident_types || {};
+            new Chart(document.getElementById('typeChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Emotion', 'Violence', 'Cry', 'Neglect', 'Language'],
+                    datasets: [{
+                        label: 'Count',
+                        data: [types.emotion||0, types.violence||0, types.cry||0, types.neglect||0, types.language||0],
+                        backgroundColor: ['#f97316', '#ef4444', '#3b82f6', '#6b7280', '#8b5cf6']
+                    }]
+                },
+                options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+        }
+    });
+    </script>
+
+    </div>
+</body>
+</html>
+        """
+
         return html
     
     def _save_csv_report(self, report: Dict):
