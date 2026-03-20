@@ -24,7 +24,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libsndfile1
+          sudo apt-get install -y ffmpeg libsndfile1 portaudio19-dev
 
       - name: Cache pip packages
         uses: actions/cache@v4
@@ -35,10 +35,14 @@ jobs:
             ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+        timeout-minutes: 15
 
       - name: Run unit tests
         run: python -m pytest tests/ -v --tb=short --junitxml=test-results.xml
+        timeout-minutes: 5
 
       - name: Upload test results
         if: always()
@@ -81,6 +85,7 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t soundshield-ai:latest .
+        timeout-minutes: 30
 
       - name: Test Docker health check
         run: |
