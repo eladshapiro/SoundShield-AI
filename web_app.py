@@ -25,7 +25,14 @@ except ImportError:
     db = None
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-CORS(app)
+
+# CORS: restrict origins in production via CORS_ORIGINS env var
+_cors_origins = config.web.cors_origins
+if _cors_origins == '*':
+    CORS(app)
+else:
+    CORS(app, resources={r"/*": {"origins": [o.strip() for o in _cors_origins.split(',')]}})
+
 register_error_handlers(app)
 
 # Configuration — driven by config.py

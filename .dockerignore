@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+
+# Virtual environments
+venv
+.venv
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Data (mounted as volumes)
+uploads/
+reports/
+*.db
+*.log
+
+# Documentation
+*.md
+!INSTALL_FFMPEG.md
+
+# Tests
+tests/
+test_*.py
+run_*_test*.py
+
+# Claude
+.claude/
+
+# Environment
+.env

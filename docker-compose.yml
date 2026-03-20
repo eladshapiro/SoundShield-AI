@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  soundshield:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${WEB_PORT:-5000}:5000"
+    volumes:
+      - uploads_data:/app/uploads
+      - reports_data:/app/reports
+      - db_data:/app/data
+    environment:
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=5000
+      - WEB_DEBUG=false
+      - DATABASE_PATH=/app/data/soundshield.db
+      - USE_ADVANCED_MODELS=${USE_ADVANCED_MODELS:-true}
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - HUBERT_MODEL=${HUBERT_MODEL:-superb/hubert-large-superb-er}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-90}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+volumes:
+  uploads_data:
+  reports_data:
+  db_data:
