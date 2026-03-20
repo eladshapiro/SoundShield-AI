@@ -102,24 +102,40 @@ class AdvancedAnalyzer:
                         self.use_whisper = False
 
             if self.use_transformer_emotion:
+                # Priority: ONNX Runtime > PyTorch HuBERT > disabled
+                onnx_loaded = False
                 try:
-                    from transformers import pipeline
-                    import torch
-                    logger.info(f"  Loading HuBERT Emotion Model ({hubert_model_name})...")
-                    self.emotion_model = pipeline(
-                        "audio-classification",
-                        model=hubert_model_name,
-                        device=-1  # CPU mode
-                    )
-                    self.hubert_loaded = True
-                    logger.info("  HuBERT Emotion loaded successfully")
-                except Exception as e:
-                    logger.warning(f"  HuBERT Emotion not available: {e}")
-                    self.use_transformer_emotion = False
+                    from model_optimizer import optimizer
+                    if optimizer.load_onnx_model():
+                        self.emotion_model = optimizer
+                        self.hubert_loaded = True
+                        self._emotion_backend = 'onnx'
+                        onnx_loaded = True
+                        logger.info("  HuBERT loaded via ONNX Runtime")
+                except Exception:
+                    pass
+
+                if not onnx_loaded:
+                    try:
+                        from transformers import pipeline
+                        import torch
+                        logger.info(f"  Loading HuBERT Emotion Model ({hubert_model_name})...")
+                        self.emotion_model = pipeline(
+                            "audio-classification",
+                            model=hubert_model_name,
+                            device=-1  # CPU mode
+                        )
+                        self.hubert_loaded = True
+                        self._emotion_backend = 'pytorch'
+                        logger.info("  HuBERT Emotion loaded successfully (PyTorch)")
+                    except Exception as e:
+                        logger.warning(f"  HuBERT Emotion not available: {e}")
+                        self.use_transformer_emotion = False
 
             self.models_loaded = self.whisper_loaded or self.hubert_loaded
             logger.info(f"Models loaded (whisper={self.whisper_loaded} "
-                        f"[{self._whisper_backend}], hubert={self.hubert_loaded})")
+                        f"[{self._whisper_backend}], hubert={self.hubert_loaded} "
+                        f"[{getattr(self, '_emotion_backend', 'none')}])")
 
         except Exception as e:
             logger.error(f"Error loading models: {e}")
