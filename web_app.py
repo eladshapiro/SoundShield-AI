@@ -7,10 +7,15 @@ from flask_cors import CORS
 import os
 import json
 import time
+import shutil
+import platform
 import queue
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from werkzeug.utils import secure_filename
 from main import KindergartenRecordingAnalyzer
+from config import config
+from api_errors import register_error_handlers, APIError
 
 # Import database
 try:
@@ -21,11 +26,12 @@ except ImportError:
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS(app)
+register_error_handlers(app)
 
-# Configuration
-UPLOAD_FOLDER = 'uploads'
-REPORTS_FOLDER = 'reports'
-ALLOWED_EXTENSIONS = {'wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'}
+# Configuration — driven by config.py
+UPLOAD_FOLDER = config.web.upload_folder
+REPORTS_FOLDER = config.web.reports_folder
+ALLOWED_EXTENSIONS = set(config.web.allowed_extensions)
 
 # Ensure directories exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -33,10 +39,10 @@ os.makedirs(REPORTS_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['REPORTS_FOLDER'] = REPORTS_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
+app.config['MAX_CONTENT_LENGTH'] = config.web.max_content_length
 
 # Thread pool for async analysis
-executor = ThreadPoolExecutor(max_workers=2)
+executor = ThreadPoolExecutor(max_workers=config.web.max_workers)
 
 # Initialize analyzer
 analyzer = None
@@ -588,12 +594,37 @@ def get_progress():
         return jsonify(current_progress)
 
 @app.route('/health')
+@app.route('/api/v1/health')
 def health_check():
-    """Health check endpoint"""
+    """Production-grade health check endpoint."""
+    import torch
+
+    # Disk space
+    disk = shutil.disk_usage('.')
+    disk_free_gb = round(disk.free / (1024 ** 3), 2)
+
+    # Model availability
+    models = {
+        'whisper': False,
+        'hubert': False,
+    }
+    if analyzer and hasattr(analyzer, 'advanced_analyzer') and analyzer.advanced_analyzer:
+        aa = analyzer.advanced_analyzer
+        models['whisper'] = getattr(aa, 'whisper_model', None) is not None
+        models['hubert'] = getattr(aa, 'emotion_model', None) is not None
+
+    gpu_available = torch.cuda.is_available()
+
     return jsonify({
         'status': 'healthy',
-        'timestamp': time.time(),
-        'analyzer_initialized': analyzer is not None
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'version': config.version,
+        'analyzer_initialized': analyzer is not None,
+        'models': models,
+        'gpu_available': gpu_available,
+        'disk_free_gb': disk_free_gb,
+        'active_jobs': len(job_results),
+        'platform': platform.system(),
     })
 
 
@@ -1697,4 +1728,4 @@ if __name__ == '__main__':
     print("Web application ready!")
     print("Open in browser: http://localhost:5000")
 
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=config.web.debug, host=config.web.host, port=config.web.port)

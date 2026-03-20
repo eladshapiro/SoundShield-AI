@@ -17,13 +17,15 @@ import librosa
 
 warnings.filterwarnings('ignore')
 
+from config import config
+
 # Configure module logger
 logger = logging.getLogger(__name__)
 
 # Constants
 SUPPORTED_EMOTIONS = ['anger', 'stress', 'calm', 'aggression']
-DEFAULT_CONFIDENCE_THRESHOLD = 0.6
-MIN_SEGMENT_LENGTH_SECONDS = 0.5
+DEFAULT_CONFIDENCE_THRESHOLD = config.emotion.confidence_threshold
+MIN_SEGMENT_LENGTH_SECONDS = config.emotion.min_segment_length
 
 
 class EmotionDetectionError(Exception):
@@ -52,28 +54,29 @@ class EmotionDetector:
         """Initialize Emotion Detector with threshold configurations."""
         logger.info("Initializing Emotion Detector")
         
+        cfg = config.emotion
         # Emotion thresholds based on audio features
         # ספי רגשות בהתבסס על תכונות אודיו
         self.emotion_thresholds = {
             'anger': {
-                'energy_threshold': 0.15,
-                'pitch_variance_threshold': 0.3,
-                'spectral_rolloff_threshold': 0.6
+                'energy_threshold': cfg.anger_energy,
+                'pitch_variance_threshold': cfg.anger_pitch_variance,
+                'spectral_rolloff_threshold': cfg.anger_spectral_rolloff
             },
             'stress': {
-                'energy_variance_threshold': 0.1,
-                'zero_crossing_rate_threshold': 0.05,
-                'spectral_centroid_variance_threshold': 0.2
+                'energy_variance_threshold': cfg.stress_energy_variance,
+                'zero_crossing_rate_threshold': cfg.stress_zcr,
+                'spectral_centroid_variance_threshold': cfg.stress_spectral_centroid_variance
             },
             'calm': {
-                'energy_threshold': 0.05,
-                'pitch_stability_threshold': 0.8,
-                'spectral_rolloff_threshold': 0.4
+                'energy_threshold': cfg.calm_energy,
+                'pitch_stability_threshold': cfg.calm_pitch_stability,
+                'spectral_rolloff_threshold': cfg.calm_spectral_rolloff
             },
             'aggression': {
-                'energy_threshold': 0.2,
-                'pitch_variance_threshold': 0.4,
-                'spectral_bandwidth_threshold': 0.7
+                'energy_threshold': cfg.aggression_energy,
+                'pitch_variance_threshold': cfg.aggression_pitch_variance,
+                'spectral_bandwidth_threshold': cfg.aggression_spectral_bandwidth
             }
         }
         

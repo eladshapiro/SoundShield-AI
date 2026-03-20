@@ -3,11 +3,16 @@ Violence Detection Module for Kindergarten Recording Analyzer
 מודול זיהוי אלימות למערכת ניתוח הקלטות גן ילדים
 """
 
+import logging
 import numpy as np
 import librosa
 from typing import Dict, List, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
+
+from config import config
+
+logger = logging.getLogger(__name__)
 
 class ViolenceDetector:
     def __init__(self):
@@ -15,41 +20,42 @@ class ViolenceDetector:
         Initialize Violence Detector
         אתחול מזהה אלימות
         """
+        cfg = config.violence
         # Violence detection parameters
         # פרמטרים לזיהוי אלימות
         self.violence_thresholds = {
             'shouting': {
-                'energy_threshold': 0.25,
-                'frequency_variance_threshold': 0.4,
-                'spectral_rolloff_threshold': 0.7,
-                'duration_threshold': 0.3
+                'energy_threshold': cfg.shouting_energy,
+                'frequency_variance_threshold': cfg.shouting_freq_variance,
+                'spectral_rolloff_threshold': cfg.shouting_spectral_rolloff,
+                'duration_threshold': cfg.shouting_duration
             },
             'aggressive_tone': {
-                'energy_threshold': 0.2,
-                'pitch_variance_threshold': 0.35,
-                'spectral_bandwidth_threshold': 0.6,
-                'zero_crossing_rate_threshold': 0.08
+                'energy_threshold': cfg.aggressive_energy,
+                'pitch_variance_threshold': cfg.aggressive_pitch_variance,
+                'spectral_bandwidth_threshold': cfg.aggressive_spectral_bandwidth,
+                'zero_crossing_rate_threshold': cfg.aggressive_zcr
             },
             'threatening': {
-                'energy_threshold': 0.18,
-                'frequency_low_threshold': 80,  # Low pitch indicates threat
-                'spectral_contrast_threshold': 0.5,
-                'duration_threshold': 1.0
+                'energy_threshold': cfg.threatening_energy,
+                'frequency_low_threshold': cfg.threatening_freq_low,
+                'spectral_contrast_threshold': cfg.threatening_spectral_contrast,
+                'duration_threshold': cfg.threatening_duration
             },
             'physical_violence_indicators': {
-                'sudden_energy_spike_threshold': 0.4,
-                'high_frequency_content_threshold': 0.8,
-                'rapid_changes_threshold': 0.6
+                'sudden_energy_spike_threshold': cfg.physical_energy_spike,
+                'high_frequency_content_threshold': cfg.physical_hf_content,
+                'rapid_changes_threshold': cfg.physical_rapid_changes
             }
         }
-        
+
         # Context analysis parameters
         # פרמטרים לניתוח הקשר
         self.context_analysis = {
-            'before_violence_window': 5.0,  # seconds before incident
-            'after_violence_window': 5.0,  # seconds after incident
-            'silence_after_violence_threshold': 2.0,  # suspicious silence
-            'continued_distress_threshold': 10.0  # continued crying/distress
+            'before_violence_window': cfg.before_violence_window,
+            'after_violence_window': cfg.after_violence_window,
+            'silence_after_violence_threshold': cfg.silence_after_violence,
+            'continued_distress_threshold': cfg.continued_distress
         }
     
     def detect_violence_segments(self, audio: np.ndarray, sr: int) -> List[Dict]:

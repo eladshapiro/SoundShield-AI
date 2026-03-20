@@ -3,11 +3,16 @@ Baby Cry Detection Module for Kindergarten Recording Analyzer
 מודול זיהוי בכי תינוקות למערכת ניתוח הקלטות גן ילדים
 """
 
+import logging
 import numpy as np
 import librosa
 from typing import Dict, List, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
+
+from config import config
+
+logger = logging.getLogger(__name__)
 
 class CryDetector:
     def __init__(self):
@@ -15,24 +20,25 @@ class CryDetector:
         Initialize Baby Cry Detector
         אתחול מזהה בכי תינוקות
         """
+        cfg = config.cry
         # Baby cry characteristics
         # מאפיינים של בכי תינוקות
         self.cry_features = {
-            'frequency_range': (200, 800),  # Hz - typical baby cry frequency range
-            'duration_range': (0.5, 10.0),  # seconds - typical cry duration
-            'energy_threshold': 0.08,  # minimum energy level for cry detection
-            'pitch_variance_threshold': 0.15,  # pitch variation in cries
-            'spectral_rolloff_threshold': 0.4,  # high frequency content
-            'zero_crossing_rate_threshold': 0.02  # speech-like characteristics
+            'frequency_range': cfg.frequency_range,
+            'duration_range': cfg.duration_range,
+            'energy_threshold': cfg.energy_threshold,
+            'pitch_variance_threshold': cfg.pitch_variance_threshold,
+            'spectral_rolloff_threshold': cfg.spectral_rolloff_threshold,
+            'zero_crossing_rate_threshold': cfg.zero_crossing_rate_threshold
         }
-        
+
         # Response detection parameters
         # פרמטרים לזיהוי תגובה
         self.response_features = {
-            'response_window': 10.0,  # seconds - window to look for responses after cry
-            'min_response_duration': 1.0,  # minimum response duration
-            'response_energy_threshold': 0.05,  # minimum energy for response
-            'response_pitch_threshold': 100  # Hz - typical adult voice pitch
+            'response_window': cfg.response_window,
+            'min_response_duration': cfg.min_response_duration,
+            'response_energy_threshold': cfg.response_energy_threshold,
+            'response_pitch_threshold': cfg.response_pitch_threshold
         }
     
     def detect_cry_segments(self, audio: np.ndarray, sr: int) -> List[Dict]:

@@ -3,6 +3,7 @@ Neglect Detection Module for Kindergarten Recording Analyzer
 מודול זיהוי הזנחה למערכת ניתוח הקלטות גן ילדים
 """
 
+import logging
 import numpy as np
 import librosa
 from typing import Dict, List, Tuple, Optional
@@ -10,37 +11,42 @@ from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
+from config import config
+
+logger = logging.getLogger(__name__)
+
 class NeglectDetector:
     def __init__(self):
         """
         Initialize Neglect Detector
         אתחול מזהה הזנחה
         """
+        cfg = config.neglect
         # Neglect detection parameters
         # פרמטרים לזיהוי הזנחה
         self.neglect_thresholds = {
-            'unanswered_cry_duration': 30.0,  # seconds - cry without response
-            'min_cry_duration': 5.0,  # minimum cry duration to be considered
-            'response_window': 15.0,  # window to look for response after cry
-            'silence_after_distress': 60.0,  # suspicious silence after distress
-            'repeated_unanswered_cries': 3,  # number of unanswered cries to flag
-            'long_term_silence': 300.0,  # 5 minutes of silence might indicate neglect
+            'unanswered_cry_duration': cfg.unanswered_cry_duration,
+            'min_cry_duration': cfg.min_cry_duration,
+            'response_window': cfg.response_window,
+            'silence_after_distress': cfg.silence_after_distress,
+            'repeated_unanswered_cries': cfg.repeated_unanswered_cries,
+            'long_term_silence': cfg.long_term_silence,
         }
-        
+
         # Activity patterns that indicate neglect
         # דפוסי פעילות שמעידים על הזנחה
         self.neglect_patterns = {
             'prolonged_silence': {
-                'duration_threshold': 120.0,  # 2 minutes
-                'energy_threshold': 0.02
+                'duration_threshold': cfg.prolonged_silence_duration,
+                'energy_threshold': cfg.prolonged_silence_energy
             },
             'lack_of_interaction': {
-                'adult_speech_threshold': 0.1,  # minimum adult speech per hour
-                'interaction_window': 3600.0  # 1 hour
+                'adult_speech_threshold': cfg.adult_speech_threshold,
+                'interaction_window': cfg.interaction_window
             },
             'ignored_distress': {
-                'distress_duration_threshold': 20.0,
-                'response_energy_threshold': 0.08
+                'distress_duration_threshold': cfg.distress_duration_threshold,
+                'response_energy_threshold': cfg.response_energy_threshold
             }
         }
     
@@ -69,29 +75,29 @@ class NeglectDetector:
             'neglect_severity': 'none'
         }
         
-        print("Analyzing for neglect patterns...")
-        
+        logger.info("Analyzing for neglect patterns...")
+
         # Detect unanswered cries
         if cry_segments:
-            print("Checking for unanswered cries...")
+            logger.info("Checking for unanswered cries...")
             neglect_analysis['unanswered_cries'] = self._detect_unanswered_cries(
                 audio, sr, cry_segments
             )
-        
+
         # Detect prolonged silence periods
-        print("Checking for prolonged silence...")
+        logger.info("Checking for prolonged silence...")
         neglect_analysis['prolonged_silence_periods'] = self._detect_prolonged_silence(
             audio, sr
         )
-        
+
         # Detect lack of interaction
-        print("Checking for lack of interaction...")
+        logger.info("Checking for lack of interaction...")
         neglect_analysis['lack_of_interaction_periods'] = self._detect_lack_of_interaction(
             audio, sr
         )
-        
+
         # Detect ignored distress
-        print("Checking for ignored distress...")
+        logger.info("Checking for ignored distress...")
         neglect_analysis['ignored_distress_episodes'] = self._detect_ignored_distress(
             audio, sr, violence_segments
         )

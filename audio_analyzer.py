@@ -3,6 +3,7 @@ Audio Analysis Module for Kindergarten Recording Analyzer
 מודול ניתוח אודיו למערכת ניתוח הקלטות גן ילדים
 """
 
+import logging
 import librosa
 import numpy as np
 import pandas as pd
@@ -10,16 +11,20 @@ from typing import Dict, List, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
 
+from config import config
+
+logger = logging.getLogger(__name__)
+
 class AudioAnalyzer:
-    def __init__(self, sample_rate: int = 22050):
+    def __init__(self, sample_rate: int = None):
         """
         Initialize Audio Analyzer
         אתחול מנתח האודיו
 
         Args:
-            sample_rate: Sample rate for audio processing
+            sample_rate: Sample rate for audio processing (default from config)
         """
-        self.sample_rate = sample_rate
+        self.sample_rate = sample_rate or config.audio.sample_rate
         self.noise_baseline = None
         
     def load_audio(self, file_path: str) -> Tuple[np.ndarray, int]:
@@ -230,24 +235,24 @@ class AudioAnalyzer:
         Returns:
             Dictionary containing all analysis results
         """
-        print(f"Loading audio file: {file_path}")
+        logger.info(f"Loading audio file: {file_path}")
         audio, sr = self.load_audio(file_path)
 
-        print("Calibrating noise baseline...")
+        logger.info("Calibrating noise baseline...")
         baseline = self.calibrate_noise_baseline(audio, sr)
         silence_thresh = baseline['silence_threshold']
         loud_thresh = baseline['loud_threshold']
 
-        print("Extracting features...")
+        logger.info("Extracting features...")
         features = self.extract_features(audio, sr)
 
-        print("Detecting silence...")
+        logger.info("Detecting silence...")
         silent_segments = self.detect_silence(audio, threshold=silence_thresh)
 
-        print("Detecting loud segments...")
+        logger.info("Detecting loud segments...")
         loud_segments = self.detect_loud_segments(audio, threshold=loud_thresh)
 
-        print("Segmenting audio...")
+        logger.info("Segmenting audio...")
         segments = self.segment_audio(audio)
 
         analysis_result = {
@@ -262,9 +267,9 @@ class AudioAnalyzer:
             'noise_baseline': baseline
         }
 
-        print(f"Analysis complete. Duration: {features['duration']:.2f} seconds")
-        print(f"Noise floor: {baseline['noise_floor_db']:.1f} dB")
-        print(f"Found {len(silent_segments)} silent segments and {len(loud_segments)} loud segments")
+        logger.info(f"Analysis complete. Duration: {features['duration']:.2f} seconds")
+        logger.info(f"Noise floor: {baseline['noise_floor_db']:.1f} dB")
+        logger.info(f"Found {len(silent_segments)} silent segments and {len(loud_segments)} loud segments")
 
         return analysis_result
 
