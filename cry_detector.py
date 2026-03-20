@@ -536,6 +536,146 @@ class CryDetector:
         else:
             return 'good'
 
+    # ---- Sprint 5 enhancements ----
+
+    def measure_response_time(self, audio: np.ndarray, sr: int,
+                              cry_segments: List[Dict]) -> List[Dict]:
+        """Quantified staff response time metric.
+
+        For each cry segment, measures exact seconds from cry onset to first
+        adult vocal activity. Flags based on configurable thresholds.
+
+        Returns enriched cry segments with response_time_seconds and
+        response_rating fields.
+        """
+        enriched = []
+        for cry in cry_segments:
+            entry = cry.copy()
+            # Search from cry start (not end) for more accurate timing
+            search_start = cry['end_time']
+            search_end = min(search_start + self.response_features['response_window'] * 3,
+                             len(audio) / sr)
+
+            # Scan in 0.5s steps for first adult speech
+            step = 0.5
+            response_time = None
+            t = search_start
+            while t < search_end:
+                t_end = min(t + 1.0, search_end)
+                start_sample = int(t * sr)
+                end_sample = int(t_end * sr)
+                if end_sample <= start_sample:
+                    break
+                chunk = audio[start_sample:end_sample]
+                if len(chunk) >= sr * 0.3:
+                    features = self._calculate_response_features(chunk, sr)
+                    if self._is_response_segment(features):
+                        response_time = t - cry['start_time']
+                        break
+                t += step
+
+            entry['response_time_seconds'] = response_time
+            if response_time is None:
+                entry['response_rating'] = 'no_response'
+            elif response_time <= 30:
+                entry['response_rating'] = 'immediate'
+            elif response_time <= 60:
+                entry['response_rating'] = 'acceptable'
+            elif response_time <= 180:
+                entry['response_rating'] = 'slow'
+            else:
+                entry['response_rating'] = 'critical_delay'
+
+            enriched.append(entry)
+        return enriched
+
+    def detect_escalation_pattern(self, cry_segments: List[Dict]) -> List[Dict]:
+        """Detect escalation patterns: increasing intensity without intervention.
+
+        Returns segments flagged as escalating, with escalation metadata.
+        """
+        if len(cry_segments) < 2:
+            return []
+
+        escalations = []
+        intensity_rank = {'low': 1, 'medium': 2, 'high': 3}
+
+        for i in range(1, len(cry_segments)):
+            prev = cry_segments[i - 1]
+            curr = cry_segments[i]
+
+            prev_rank = intensity_rank.get(prev.get('intensity', 'low'), 1)
+            curr_rank = intensity_rank.get(curr.get('intensity', 'low'), 1)
+
+            # Escalation: intensity increases AND no response detected on prev
+            if curr_rank > prev_rank and not prev.get('response_detected', False):
+                escalations.append({
+                    'start_time': prev.get('start_time', 0),
+                    'end_time': curr.get('end_time', 0),
+                    'from_intensity': prev.get('intensity', 'low'),
+                    'to_intensity': curr.get('intensity', 'low'),
+                    'duration': curr.get('end_time', 0) - prev.get('start_time', 0),
+                    'no_intervention': True,
+                })
+        return escalations
+
+    def aggregate_cry_episodes(self, cry_segments: List[Dict],
+                               gap_threshold: float = 5.0) -> List[Dict]:
+        """Group continuous/intermittent crying into episodes.
+
+        Segments within gap_threshold seconds of each other are grouped.
+        Returns episodes with total duration, peak intensity, and
+        whether they resolved with staff intervention.
+        """
+        if not cry_segments:
+            return []
+
+        sorted_segs = sorted(cry_segments, key=lambda x: x['start_time'])
+        episodes = []
+        current_episode = {
+            'segments': [sorted_segs[0]],
+            'start_time': sorted_segs[0]['start_time'],
+            'end_time': sorted_segs[0]['end_time'],
+        }
+
+        for seg in sorted_segs[1:]:
+            if seg['start_time'] - current_episode['end_time'] <= gap_threshold:
+                current_episode['segments'].append(seg)
+                current_episode['end_time'] = max(current_episode['end_time'],
+                                                   seg['end_time'])
+            else:
+                episodes.append(self._finalize_episode(current_episode))
+                current_episode = {
+                    'segments': [seg],
+                    'start_time': seg['start_time'],
+                    'end_time': seg['end_time'],
+                }
+
+        episodes.append(self._finalize_episode(current_episode))
+        return episodes
+
+    def _finalize_episode(self, episode: Dict) -> Dict:
+        """Compute summary stats for a cry episode."""
+        segments = episode['segments']
+        intensity_rank = {'low': 1, 'medium': 2, 'high': 3}
+        intensities = [s.get('intensity', 'low') for s in segments]
+        peak_idx = max(range(len(intensities)),
+                       key=lambda i: intensity_rank.get(intensities[i], 0))
+
+        resolved = any(s.get('response_detected', False) for s in segments)
+        confidences = [s.get('confidence', 0) for s in segments]
+
+        return {
+            'start_time': episode['start_time'],
+            'end_time': episode['end_time'],
+            'total_duration': episode['end_time'] - episode['start_time'],
+            'segment_count': len(segments),
+            'peak_intensity': intensities[peak_idx],
+            'mean_confidence': sum(confidences) / len(confidences) if confidences else 0,
+            'resolved_with_intervention': resolved,
+        }
+
+
 if __name__ == "__main__":
     # Test the cry detector
     detector = CryDetector()

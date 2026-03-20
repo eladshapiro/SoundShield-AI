@@ -1814,6 +1814,20 @@ def create_html_template():
     with open('templates/index.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
 
+# =====================================================================
+# WebSocket Live Monitoring (optional — requires flask-socketio)
+# =====================================================================
+try:
+    from flask_socketio import SocketIO
+    from live_monitor import register_socketio_events
+    socketio = SocketIO(app, cors_allowed_origins="*")
+    register_socketio_events(socketio, app)
+    WEBSOCKET_AVAILABLE = True
+except ImportError:
+    socketio = None
+    WEBSOCKET_AVAILABLE = False
+
+
 if __name__ == '__main__':
     print("Initializing web application...")
 
@@ -1827,6 +1841,11 @@ if __name__ == '__main__':
         create_html_template()
 
     print("Web application ready!")
-    print("Open in browser: http://localhost:5000")
-
-    app.run(debug=config.web.debug, host=config.web.host, port=config.web.port)
+    print(f"Open in browser: http://localhost:{config.web.port}")
+    if WEBSOCKET_AVAILABLE:
+        print("WebSocket live monitoring available at /ws namespace")
+        socketio.run(app, debug=config.web.debug, host=config.web.host,
+                     port=config.web.port)
+    else:
+        print("WebSocket not available (install flask-socketio for live monitoring)")
+        app.run(debug=config.web.debug, host=config.web.host, port=config.web.port)
