@@ -618,8 +618,6 @@ def get_progress():
 @app.route('/api/v1/health')
 def health_check():
     """Production-grade health check endpoint."""
-    import torch
-
     # Disk space
     disk = shutil.disk_usage('.')
     disk_free_gb = round(disk.free / (1024 ** 3), 2)
@@ -634,7 +632,11 @@ def health_check():
         models['whisper'] = getattr(aa, 'whisper_model', None) is not None
         models['hubert'] = getattr(aa, 'emotion_model', None) is not None
 
-    gpu_available = torch.cuda.is_available()
+    try:
+        import torch
+        gpu_available = torch.cuda.is_available()
+    except ImportError:
+        gpu_available = False
 
     return jsonify({
         'status': 'healthy',
