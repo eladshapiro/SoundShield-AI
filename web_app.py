@@ -21,6 +21,7 @@ from config import (config, AudioAnalyzerConfig, CryDetectorConfig,
                      NeglectDetectorConfig)
 from api_errors import register_error_handlers, APIError
 from audit_logger import AuditLogger
+from notifications import notifications
 
 # Import database
 try:
@@ -969,6 +970,70 @@ def api_cleanup():
     audit.log('data_cleanup', details={'deleted_count': deleted,
                                         'retention_days': days or config.database.retention_days})
     return jsonify({'success': True, 'deleted': deleted})
+
+
+# --- Notification endpoints ---
+
+@app.route('/api/v1/notifications')
+def api_notifications():
+    """Get notifications with optional filters."""
+    limit = request.args.get('limit', 50, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    level = request.args.get('level')
+    unread = request.args.get('unread', 'false').lower() == 'true'
+    items = notifications.get_notifications(limit=limit, offset=offset,
+                                            level=level, unread_only=unread)
+    return jsonify({
+        'data': items,
+        'count': len(items),
+        'unread_count': notifications.get_unread_count(),
+    })
+
+
+@app.route('/api/v1/notifications/<notification_id>/read', methods=['POST'])
+def api_mark_notification_read(notification_id):
+    """Mark a notification as read."""
+    ok = notifications.mark_read(notification_id)
+    if not ok:
+        raise APIError('NOTIFICATION_NOT_FOUND', 'Notification not found.', 404)
+    return jsonify({'success': True})
+
+
+@app.route('/api/v1/notifications/read-all', methods=['POST'])
+def api_mark_all_notifications_read():
+    """Mark all notifications as read."""
+    notifications.mark_all_read()
+    return jsonify({'success': True})
+
+
+@app.route('/api/v1/webhooks', methods=['GET'])
+def api_list_webhooks():
+    """List registered webhook URLs."""
+    return jsonify({'data': notifications._webhooks})
+
+
+@app.route('/api/v1/webhooks', methods=['POST'])
+def api_add_webhook():
+    """Register a new webhook URL."""
+    if not request.is_json or 'url' not in request.json:
+        raise APIError('INVALID_REQUEST', 'JSON body with "url" required.', 400)
+    url = request.json['url']
+    notifications.add_webhook(url)
+    audit.log('webhook_added', details={'url': url},
+              user_ip=request.remote_addr)
+    return jsonify({'success': True, 'webhooks': notifications._webhooks})
+
+
+@app.route('/api/v1/webhooks', methods=['DELETE'])
+def api_remove_webhook():
+    """Remove a webhook URL."""
+    if not request.is_json or 'url' not in request.json:
+        raise APIError('INVALID_REQUEST', 'JSON body with "url" required.', 400)
+    url = request.json['url']
+    notifications.remove_webhook(url)
+    audit.log('webhook_removed', details={'url': url},
+              user_ip=request.remote_addr)
+    return jsonify({'success': True, 'webhooks': notifications._webhooks})
 
 
 # --- Threshold configuration endpoints ---
