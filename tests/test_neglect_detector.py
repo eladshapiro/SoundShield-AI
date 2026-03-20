@@ -17,10 +17,26 @@ def make_silence(sr=22050, duration=5.0):
 
 
 def make_speech(sr=22050, duration=2.0, freq=150, amplitude=0.15):
-    """Generate speech-like audio."""
+    """Generate speech-like audio with low spectral centroid (<400Hz).
+
+    Uses a band-limited pulse train filtered to keep most energy below 400Hz.
+    """
+    from scipy.signal import butter, lfilter
     t = np.linspace(0, duration, int(sr * duration), endpoint=False)
-    signal = amplitude * np.sin(2 * np.pi * freq * t)
-    signal += 0.02 * np.random.randn(len(t))
+    # Fundamental + harmonics
+    signal = (
+        amplitude * np.sin(2 * np.pi * freq * t) +
+        amplitude * 0.5 * np.sin(2 * np.pi * 2 * freq * t) +
+        amplitude * 0.25 * np.sin(2 * np.pi * 3 * freq * t)
+    )
+    # Low-pass filter at 400Hz to ensure spectral centroid stays low
+    nyq = sr / 2
+    b, a = butter(4, 400 / nyq, btype='low')
+    signal = lfilter(b, a, signal)
+    # Re-scale to target amplitude
+    peak = np.max(np.abs(signal))
+    if peak > 0:
+        signal = signal / peak * amplitude
     return signal
 
 

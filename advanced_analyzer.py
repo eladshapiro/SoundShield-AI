@@ -1,16 +1,27 @@
 """
 Advanced Analyzer with State-of-the-Art Models
+
+Supports Faster-Whisper (CTranslate2) for 4x speedup,
+falling back to standard OpenAI Whisper if unavailable.
 """
 
+import logging
 import numpy as np
 import librosa
 from typing import Dict, List, Optional
 import warnings
 warnings.filterwarnings('ignore')
 
+from config import config
+
+logger = logging.getLogger(__name__)
+
+
 class AdvancedAnalyzer:
     """
-    Advanced analyzer using best-in-class models
+    Advanced analyzer using best-in-class models.
+
+    Whisper priority: faster-whisper > openai-whisper > disabled.
     """
 
     # HuBERT emotion label mapping to severity schema
@@ -36,47 +47,82 @@ class AdvancedAnalyzer:
         self.models_loaded = False
         self.whisper_loaded = False
         self.hubert_loaded = False
+        self._whisper_backend = None  # 'faster-whisper' or 'openai-whisper'
 
-        print("Initializing Advanced Analyzer...")
+        logger.info("Initializing Advanced Analyzer...")
         
     def load_models(self):
-        """Load advanced models if available"""
+        """Load advanced models if available.
+
+        Whisper loading priority:
+        1. faster-whisper (CTranslate2) — 4x faster, 75% less memory
+        2. openai-whisper — standard fallback
+        3. disabled
+        """
+        model_name = config.advanced.whisper_model
+        hubert_model_name = config.advanced.hubert_model
+
         try:
             if self.use_whisper:
+                # Try faster-whisper first
                 try:
-                    import whisper
-                    print("  Loading Whisper...")
-                    self.whisper_model = whisper.load_model("base")
+                    from faster_whisper import WhisperModel
+                    logger.info(f"  Loading Faster-Whisper ({model_name})...")
+                    self.whisper_model = WhisperModel(
+                        model_name, device="cpu", compute_type="int8"
+                    )
+                    self._whisper_backend = 'faster-whisper'
                     self.whisper_loaded = True
-                    print("  ✅ Whisper loaded successfully")
+                    logger.info("  Faster-Whisper loaded successfully")
                 except ImportError:
-                    print("  ⚠️ Whisper not installed - skipping")
-                    self.use_whisper = False
+                    # Fallback to standard whisper
+                    try:
+                        import whisper
+                        logger.info(f"  Loading OpenAI Whisper ({model_name})...")
+                        self.whisper_model = whisper.load_model(model_name)
+                        self._whisper_backend = 'openai-whisper'
+                        self.whisper_loaded = True
+                        logger.info("  OpenAI Whisper loaded successfully")
+                    except ImportError:
+                        logger.warning("  Whisper not installed - skipping")
+                        self.use_whisper = False
+                    except Exception as e:
+                        logger.warning(f"  Error loading Whisper: {e}")
+                        self.use_whisper = False
                 except Exception as e:
-                    print(f"  ⚠️ Error loading Whisper: {e}")
-                    self.use_whisper = False
+                    logger.warning(f"  Error loading Faster-Whisper: {e}")
+                    # Fallback to standard whisper
+                    try:
+                        import whisper
+                        self.whisper_model = whisper.load_model(model_name)
+                        self._whisper_backend = 'openai-whisper'
+                        self.whisper_loaded = True
+                        logger.info("  Fell back to OpenAI Whisper")
+                    except Exception:
+                        self.use_whisper = False
 
             if self.use_transformer_emotion:
                 try:
                     from transformers import pipeline
                     import torch
-                    print("  Loading HuBERT Emotion Model...")
+                    logger.info(f"  Loading HuBERT Emotion Model ({hubert_model_name})...")
                     self.emotion_model = pipeline(
                         "audio-classification",
-                        model="superb/hubert-large-superb-er",
+                        model=hubert_model_name,
                         device=-1  # CPU mode
                     )
                     self.hubert_loaded = True
-                    print("  ✅ HuBERT Emotion loaded successfully")
+                    logger.info("  HuBERT Emotion loaded successfully")
                 except Exception as e:
-                    print(f"  ⚠️ HuBERT Emotion not available: {e}")
+                    logger.warning(f"  HuBERT Emotion not available: {e}")
                     self.use_transformer_emotion = False
 
             self.models_loaded = self.whisper_loaded or self.hubert_loaded
-            print(f"✅ Models loaded (whisper={self.whisper_loaded}, hubert={self.hubert_loaded})")
-            
+            logger.info(f"Models loaded (whisper={self.whisper_loaded} "
+                        f"[{self._whisper_backend}], hubert={self.hubert_loaded})")
+
         except Exception as e:
-            print(f"Error loading models: {e}")
+            logger.error(f"Error loading models: {e}")
     
     def analyze_with_whisper(self, audio_file: str, language: str = 'en') -> Dict:
         """
@@ -88,52 +134,45 @@ class AdvancedAnalyzer:
         """
         if not self.use_whisper or not self.whisper_model:
             return {}
-        
+
         try:
             import os
-            # Ensure absolute path and file exists
             audio_path = os.path.abspath(audio_file)
             if not os.path.exists(audio_path):
-                print(f"⚠️ Audio file not found: {audio_path}")
+                logger.warning(f"Audio file not found: {audio_path}")
                 return {'error': f'File not found: {audio_path}'}
-            
-            # Normalize path for Windows
+
             audio_path = os.path.normpath(audio_path)
-            
-            # Map language code to Whisper language code
             whisper_lang = 'he' if language == 'he' else 'en'
-            
-            # Try to transcribe with better error handling
+
+            # --- Transcribe using the loaded backend ---
             try:
-                # Use the same approach as inappropriate_language_detector
-                result = self.whisper_model.transcribe(audio_path, language=whisper_lang, fp16=False)
+                if self._whisper_backend == 'faster-whisper':
+                    result = self._transcribe_faster_whisper(audio_path, whisper_lang)
+                else:
+                    result = self._transcribe_openai_whisper(audio_path, whisper_lang)
             except FileNotFoundError as e:
-                # This might be ffmpeg not found
-                print(f"⚠️ Whisper file error (might be missing ffmpeg): {e}")
-                print(f"   Audio path: {audio_path}")
-                print(f"   File exists: {os.path.exists(audio_path)}")
-                print(f"   Note: Whisper requires ffmpeg. Install it or use librosa preprocessing.")
-                # Try alternative: load with librosa first
+                logger.warning(f"Whisper file error (might be missing ffmpeg): {e}")
+                # Fallback: pre-process with librosa
                 try:
-                    import librosa
-                    print("   Trying alternative: loading audio with librosa first...")
-                    audio_data, sr = librosa.load(audio_path, sr=16000)
-                    # Save to temporary wav file
                     import tempfile
                     import soundfile as sf
+                    logger.info("Trying librosa pre-processing fallback...")
+                    audio_data, sr = librosa.load(audio_path, sr=16000)
                     tmp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
                     tmp_path = tmp_file.name
-                    tmp_file.close()  # Close file handle before writing
+                    tmp_file.close()
                     sf.write(tmp_path, audio_data, sr)
-                    result = self.whisper_model.transcribe(tmp_path, language=whisper_lang, fp16=False)
-                    os.unlink(tmp_path)  # Clean up
-                    print("   ✅ Alternative method worked!")
+                    if self._whisper_backend == 'faster-whisper':
+                        result = self._transcribe_faster_whisper(tmp_path, whisper_lang)
+                    else:
+                        result = self._transcribe_openai_whisper(tmp_path, whisper_lang)
+                    os.unlink(tmp_path)
                 except Exception as e2:
-                    print(f"   ⚠️ Alternative method also failed: {e2}")
-                    return {'error': f'Whisper file error: {str(e)}. Note: ffmpeg might be required.'}
+                    logger.error(f"Librosa fallback also failed: {e2}")
+                    return {'error': f'Whisper file error: {str(e)}'}
             except Exception as e:
-                print(f"⚠️ Whisper transcription error: {e}")
-                print(f"   Error type: {type(e).__name__}")
+                logger.error(f"Whisper transcription error: {e}")
                 return {'error': f'Whisper error: {str(e)}'}
             
             # Extract concerning patterns
@@ -180,19 +219,46 @@ class AdvancedAnalyzer:
                 'has_concerning_content': len(concerning_segments) > 0
             }
             
-        except FileNotFoundError as e:
-            import os
-            print(f"⚠️ Whisper file not found error: {e}")
-            print(f"   Audio file path: {audio_file}")
-            print(f"   Absolute path: {os.path.abspath(audio_file) if audio_file else 'N/A'}")
-            print(f"   File exists: {os.path.exists(audio_file) if audio_file else False}")
-            print(f"   This might be a missing dependency (e.g., ffmpeg) required by Whisper")
-            return {'error': f'File not found: {str(e)}', 'details': 'This might be a missing dependency (e.g., ffmpeg)'}
         except Exception as e:
-            print(f"⚠️ Error in Whisper analysis: {e}")
-            print(f"   Error type: {type(e).__name__}")
+            logger.error(f"Error in Whisper analysis: {e}")
             return {'error': str(e), 'error_type': type(e).__name__}
     
+    def _transcribe_faster_whisper(self, audio_path: str, language: str) -> Dict:
+        """Transcribe using faster-whisper (CTranslate2 backend)."""
+        segments_iter, info = self.whisper_model.transcribe(
+            audio_path, language=language, beam_size=5
+        )
+        segments_list = []
+        full_text_parts = []
+        for seg in segments_iter:
+            segments_list.append({
+                'start': seg.start,
+                'end': seg.end,
+                'text': seg.text,
+                'no_speech_prob': seg.no_speech_prob,
+            })
+            full_text_parts.append(seg.text)
+        return {
+            'text': ' '.join(full_text_parts),
+            'segments': segments_list,
+        }
+
+    def _transcribe_openai_whisper(self, audio_path: str, language: str) -> Dict:
+        """Transcribe using standard OpenAI Whisper."""
+        result = self.whisper_model.transcribe(audio_path, language=language, fp16=False)
+        return {
+            'text': result['text'],
+            'segments': [
+                {
+                    'start': s['start'],
+                    'end': s['end'],
+                    'text': s['text'],
+                    'no_speech_prob': s.get('no_speech_prob', 0),
+                }
+                for s in result['segments']
+            ],
+        }
+
     def analyze_emotions_advanced(self, audio_file: str, segments: List[tuple] = None) -> Dict:
         """
         Analyze emotions using advanced transformer models

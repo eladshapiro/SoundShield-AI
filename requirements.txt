@@ -21,6 +21,9 @@ scikit-learn>=1.3.0
 pyAudioAnalysis>=0.3.10
 webrtcvad>=2.0.10
 
+# Serialization (must be >=1.0.0 for librosa compatibility)
+msgpack>=1.0.0
+
 # Data Processing
 numpy>=1.24.0
 pandas>=2.0.0
@@ -42,6 +45,7 @@ Pillow>=10.0.0
 
 # Advanced Models (Primary - used by default)
 openai-whisper>=20231117  # For transcription (REQUIRES FFmpeg - see INSTALL_FFMPEG.md)
+# faster-whisper>=1.0.0  # Optional: 4x faster, 75% less memory (uncomment to enable)
 # transformers>=4.30.0  # Already listed above
 pyannote.audio>=3.1.0  # For speaker diarization
 # torch>=2.0.0  # Already listed above
