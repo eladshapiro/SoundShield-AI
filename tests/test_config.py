@@ -94,6 +94,33 @@ class TestConfig(unittest.TestCase):
             else:
                 os.environ.pop('USE_ADVANCED_MODELS', None)
 
+    def test_logging_config_defaults(self):
+        """LoggingConfig should have expected defaults."""
+        from config import LoggingConfig
+        lc = LoggingConfig()
+        self.assertEqual(lc.log_level, 'INFO')
+        self.assertEqual(lc.log_format, 'json')
+        self.assertTrue(lc.enable_correlation_id)
+
+    def test_logging_config_in_main_config(self):
+        """SoundShieldConfig should include logging_config."""
+        self.assertTrue(hasattr(config, 'logging_config'))
+        self.assertEqual(config.logging_config.log_format, 'json')
+
+    def test_correlation_id_generation(self):
+        """Test correlation ID is generated and retrievable."""
+        from structured_logging import set_correlation_id, get_correlation_id
+        cid = set_correlation_id('test-123')
+        self.assertEqual(get_correlation_id(), 'test-123')
+
+    def test_step_timer_context_manager(self):
+        """Test StepTimer works as context manager."""
+        from structured_logging import StepTimer
+        import time
+        with StepTimer('test_step', step_number=1) as timer:
+            time.sleep(0.01)
+        # No assertion needed -- just verify it doesn't throw
+
 
 if __name__ == '__main__':
     unittest.main()

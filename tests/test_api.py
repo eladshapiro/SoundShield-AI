@@ -178,6 +178,107 @@ class TestAPIEndpoints(unittest.TestCase):
         response = self.client.get('/api/v1/batch/nonexistent/status')
         self.assertEqual(response.status_code, 404)
 
+    def test_auth_login_success(self):
+        """Test login with valid credentials returns token."""
+        response = self.client.post('/api/v1/auth/login',
+            json={'username': 'admin', 'password': 'admin'})
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('token', data)
+        self.assertEqual(data['user']['role'], 'admin')
+
+    def test_auth_login_invalid(self):
+        """Test login with wrong password returns 401."""
+        response = self.client.post('/api/v1/auth/login',
+            json={'username': 'admin', 'password': 'wrong'})
+        self.assertEqual(response.status_code, 401)
+
+    def test_auth_login_missing_fields(self):
+        """Test login with missing fields returns 400."""
+        response = self.client.post('/api/v1/auth/login', json={'username': 'admin'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_auth_register_creates_user(self):
+        """Test user registration (auth disabled, so should work)."""
+        response = self.client.post('/api/v1/auth/register',
+            json={'username': 'testuser', 'password': 'testpass123', 'role': 'viewer'})
+        self.assertIn(response.status_code, [201, 400])  # 400 if user already exists from prev run
+
+    def test_auth_list_users(self):
+        """Test listing users returns data."""
+        response = self.client.get('/api/v1/auth/users')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('data', data)
+
+    # --- Input Validation & SSRF Protection Tests ---
+
+    def test_webhook_ssrf_blocked_localhost(self):
+        """Test that localhost webhook URLs are rejected."""
+        response = self.client.post('/api/v1/webhooks',
+            json={'url': 'http://127.0.0.1:6379/evil'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_webhook_ssrf_blocked_file_scheme(self):
+        """Test that file:// webhook URLs are rejected."""
+        response = self.client.post('/api/v1/webhooks',
+            json={'url': 'file:///etc/passwd'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_webhook_ssrf_blocked_private_ip(self):
+        """Test that private IP webhook URLs are rejected."""
+        response = self.client.post('/api/v1/webhooks',
+            json={'url': 'http://192.168.1.1/hook'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_invalid_language_rejected(self):
+        """Test that unsupported language parameter is rejected."""
+        import io, numpy as np, soundfile as sf
+        buf = io.BytesIO()
+        sf.write(buf, np.zeros(16000, dtype=np.float32), 16000, format='WAV')
+        buf.seek(0)
+        response = self.client.post('/upload',
+            data={'file': (buf, 'test.wav'), 'language': 'xx'},
+            content_type='multipart/form-data')
+        self.assertIn(response.status_code, [400, 302])
+
+    def test_validator_threshold_rejects_nan(self):
+        """Test that NaN threshold values are rejected."""
+        from validators import validate_threshold_value
+        is_valid, _ = validate_threshold_value('violence', 'energy', float('nan'))
+        self.assertFalse(is_valid)
+
+    def test_validator_threshold_rejects_infinity(self):
+        """Test that infinity threshold values are rejected."""
+        from validators import validate_threshold_value
+        is_valid, _ = validate_threshold_value('violence', 'energy', float('inf'))
+        self.assertFalse(is_valid)
+
+    def test_validator_audio_file_empty(self):
+        """Test that empty files are rejected."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            f.write(b'')
+            tmppath = f.name
+        from validators import validate_audio_file
+        is_valid, _ = validate_audio_file(tmppath, 'wav')
+        self.assertFalse(is_valid)
+        os.remove(tmppath)
+
+    # --- Structured Logging Tests ---
+
+    def test_logs_endpoint_returns_data(self):
+        """Test /api/v1/logs returns log entries."""
+        response = self.client.get('/api/v1/logs?limit=10')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('data', data)
+
+    def test_logs_endpoint_with_filters(self):
+        """Test /api/v1/logs accepts filter parameters."""
+        response = self.client.get('/api/v1/logs?level=ERROR&limit=5')
+        self.assertEqual(response.status_code, 200)
+
 
 if __name__ == '__main__':
     unittest.main()

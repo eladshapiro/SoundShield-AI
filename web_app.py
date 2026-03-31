@@ -22,6 +22,15 @@ from config import (config, AudioAnalyzerConfig, CryDetectorConfig,
 from api_errors import register_error_handlers, APIError
 from audit_logger import AuditLogger
 from notifications import notifications
+from validators import validate_webhook_url, validate_language, validate_threshold_value, validate_audio_file
+from auth import UserStore, generate_token, require_role, get_current_user
+
+# Structured logging with correlation IDs
+try:
+    from structured_logging import setup_logging, set_correlation_id, get_correlation_id, StepTimer
+    _structured_logging_available = True
+except ImportError:
+    _structured_logging_available = False
 
 # Import database
 try:
@@ -32,6 +41,13 @@ except ImportError:
 
 # Audit logger
 audit = AuditLogger()
+
+# User authentication
+user_store = UserStore()
+
+# Initialize structured logging (conditional)
+if _structured_logging_available:
+    setup_logging()
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
@@ -377,12 +393,14 @@ def index():
 
 @app.route('/admin')
 @rate_limit(config.security.rate_limit_api)
+@require_role('admin')
 def admin_dashboard():
     """Admin dashboard for system monitoring and threshold tuning."""
     return render_template('admin.html')
 
 @app.route('/upload', methods=['POST'])
 @rate_limit(config.security.rate_limit_upload)
+@require_role('analyst')
 def upload_file():
     """Handle file upload and analysis"""
     try:
@@ -391,10 +409,14 @@ def upload_file():
         
         file = request.files['file']
         language = request.form.get('language', 'en')  # Get language from form
-        
+
+        is_valid, error_msg = validate_language(language)
+        if not is_valid:
+            return jsonify({'error': error_msg}), 400
+
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
-        
+
         if file and allowed_file(file.filename):
             # Secure filename and save
             filename = secure_filename(file.filename)
@@ -412,6 +434,15 @@ def upload_file():
                 # Update language if analyzer already exists
                 analyzer.language = language
             
+            # Generate correlation ID for this analysis
+            if _structured_logging_available:
+                import logging as _logging
+                cid = set_correlation_id()
+                _logging.getLogger('soundshield.api').info(
+                    f"Analysis started for {filename}",
+                    extra={'event': 'analysis_start', 'filename': filename}
+                )
+
             # Initialize progress tracking for this specific analysis
             # Use filename as unique identifier to avoid race conditions
             global progress_tracking
@@ -775,6 +806,7 @@ def serve_uploaded_audio(filename):
 
 @app.route('/upload-async', methods=['POST'])
 @rate_limit(config.security.rate_limit_upload)
+@require_role('analyst')
 def upload_file_async():
     """Handle file upload and start async analysis. Returns job_id immediately."""
     try:
@@ -783,6 +815,10 @@ def upload_file_async():
 
         file = request.files['file']
         language = request.form.get('language', 'en')
+
+        is_valid, error_msg = validate_language(language)
+        if not is_valid:
+            return jsonify({'error': error_msg}), 400
 
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
@@ -861,6 +897,7 @@ def _run_analysis_async(filepath, filename, language):
 
 
 @app.route('/api/v1/batch-upload', methods=['POST'])
+@require_role('analyst')
 def batch_upload():
     """Upload multiple files for batch analysis."""
     if 'files' not in request.files:
@@ -1070,10 +1107,80 @@ def get_analysis_by_id(analysis_id):
     })
 
 # =====================================================================
+# Authentication endpoints
+# =====================================================================
+
+@app.route('/api/v1/auth/login', methods=['POST'])
+def auth_login():
+    """Authenticate and receive a JWT token."""
+    if not request.is_json:
+        return jsonify({'error': 'JSON body required'}), 400
+
+    username = request.json.get('username', '')
+    password = request.json.get('password', '')
+
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+
+    user = user_store.authenticate(username, password)
+    if not user:
+        audit.log('login_failed', details={'username': username},
+                  user_ip=request.remote_addr)
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    token = generate_token(user)
+    audit.log('login_success', details={'username': username, 'role': user['role']},
+              user_ip=request.remote_addr)
+
+    return jsonify({
+        'token': token,
+        'user': {
+            'id': user['id'],
+            'username': user['username'],
+            'role': user['role']
+        }
+    })
+
+
+@app.route('/api/v1/auth/register', methods=['POST'])
+@require_role('admin')
+def auth_register():
+    """Register a new user (admin only)."""
+    if not request.is_json:
+        return jsonify({'error': 'JSON body required'}), 400
+
+    username = request.json.get('username', '')
+    password = request.json.get('password', '')
+    role = request.json.get('role', 'viewer')
+
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+
+    if len(password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters'}), 400
+
+    try:
+        user = user_store.create_user(username, password, role)
+        audit.log('user_created', details={'username': username, 'role': role},
+                  user_ip=request.remote_addr)
+        return jsonify({'success': True, 'user': user}), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/v1/auth/users', methods=['GET'])
+@require_role('admin')
+def auth_list_users():
+    """List all users (admin only)."""
+    return jsonify({'data': user_store.list_users()})
+
+
+# =====================================================================
 # API v1 Endpoints
 # =====================================================================
 
 @app.route('/api/v1/analyses')
+@require_role('viewer')
 def api_list_analyses():
     """List analyses with pagination and filtering."""
     if not db:
@@ -1115,6 +1222,7 @@ def api_get_analysis(analysis_id):
 
 
 @app.route('/api/v1/analyses/<int:analysis_id>/export', methods=['GET'])
+@require_role('viewer')
 def export_analysis(analysis_id):
     """Export analysis as PDF."""
     export_format = request.args.get('format', 'pdf')
@@ -1144,6 +1252,7 @@ def export_analysis(analysis_id):
 
 
 @app.route('/api/v1/analyses/<int:analysis_id>', methods=['DELETE'])
+@require_role('admin')
 def api_delete_analysis(analysis_id):
     """Delete an analysis and its associated data."""
     if not db:
@@ -1179,6 +1288,7 @@ def api_audit_log():
 
 
 @app.route('/api/v1/cleanup', methods=['POST'])
+@require_role('admin')
 def api_cleanup():
     """Trigger data retention cleanup."""
     days = request.json.get('retention_days') if request.is_json else None
@@ -1229,11 +1339,15 @@ def api_list_webhooks():
 
 
 @app.route('/api/v1/webhooks', methods=['POST'])
+@require_role('admin')
 def api_add_webhook():
     """Register a new webhook URL."""
     if not request.is_json or 'url' not in request.json:
         raise APIError('INVALID_REQUEST', 'JSON body with "url" required.', 400)
     url = request.json['url']
+    is_valid, error_msg = validate_webhook_url(url)
+    if not is_valid:
+        raise APIError('INVALID_URL', error_msg, 400)
     notifications.add_webhook(url)
     audit.log('webhook_added', details={'url': url},
               user_ip=request.remote_addr)
@@ -1241,11 +1355,15 @@ def api_add_webhook():
 
 
 @app.route('/api/v1/webhooks', methods=['DELETE'])
+@require_role('admin')
 def api_remove_webhook():
     """Remove a webhook URL."""
     if not request.is_json or 'url' not in request.json:
         raise APIError('INVALID_REQUEST', 'JSON body with "url" required.', 400)
     url = request.json['url']
+    is_valid, error_msg = validate_webhook_url(url)
+    if not is_valid:
+        raise APIError('INVALID_URL', error_msg, 400)
     notifications.remove_webhook(url)
     audit.log('webhook_removed', details={'url': url},
               user_ip=request.remote_addr)
@@ -1295,6 +1413,7 @@ def api_get_thresholds():
 
 
 @app.route('/api/v1/config/thresholds', methods=['PUT'])
+@require_role('admin')
 def api_update_threshold():
     """Update a single detector threshold value.
 
@@ -1315,6 +1434,11 @@ def api_update_threshold():
     if missing:
         raise APIError('MISSING_FIELDS',
                         f'Missing required fields: {", ".join(missing)}', 400)
+
+    # --- Validate threshold value bounds ---
+    is_valid, error_msg = validate_threshold_value(detector, key, value)
+    if not is_valid:
+        raise APIError('INVALID_VALUE', error_msg, 400)
 
     # --- Validate detector name ---
     if detector not in _DETECTOR_CONFIG_MAP:
@@ -1375,6 +1499,7 @@ def api_update_threshold():
 
 
 @app.route('/api/v1/config/thresholds/reset', methods=['POST'])
+@require_role('admin')
 def api_reset_thresholds():
     """Reset all detector thresholds to their default values."""
     for name, attr in _DETECTOR_CONFIG_MAP.items():
@@ -1459,6 +1584,40 @@ def api_system_info():
 
     return jsonify({'data': info})
 
+
+@app.route('/api/v1/logs', methods=['GET'])
+def api_recent_logs():
+    """Return recent structured log entries from the log file."""
+    import json as json_module
+    log_file = config.logging_config.log_file
+    if not os.path.exists(log_file):
+        return jsonify({'data': [], 'message': 'No log file found'})
+
+    limit = request.args.get('limit', 50, type=int)
+    level_filter = request.args.get('level', '').upper()
+    correlation_filter = request.args.get('correlation_id', '')
+
+    entries = []
+    try:
+        with open(log_file, 'r') as f:
+            lines = f.readlines()
+
+        for line in reversed(lines[-500:]):
+            try:
+                entry = json_module.loads(line.strip())
+                if level_filter and entry.get('level', '') != level_filter:
+                    continue
+                if correlation_filter and entry.get('correlation_id', '') != correlation_filter:
+                    continue
+                entries.append(entry)
+                if len(entries) >= limit:
+                    break
+            except (json_module.JSONDecodeError, ValueError):
+                continue
+    except IOError:
+        pass
+
+    return jsonify({'data': entries, 'total': len(entries)})
 
 def create_html_template():
     """Create basic HTML template for the web interface"""

@@ -202,6 +202,8 @@ class SecurityConfig:
     rate_limit_api: str = _env_str('RATE_LIMIT_API', '120/minute')
     enable_security_headers: bool = _env_bool('ENABLE_SECURITY_HEADERS', True)
     hsts_max_age: int = _env_int('HSTS_MAX_AGE', 31536000)
+    auth_enabled: bool = _env_bool('AUTH_ENABLED', False)
+    jwt_expiry_hours: int = _env_int('JWT_EXPIRY_HOURS', 24)
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +243,17 @@ class PipelineConfig:
 
 
 # ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+@dataclass
+class LoggingConfig:
+    log_level: str = _env_str('LOG_LEVEL', 'INFO')
+    log_format: str = _env_str('LOG_FORMAT', 'json')  # 'json' or 'text'
+    log_file: str = _env_str('LOG_FILE', 'soundshield.log')
+    enable_correlation_id: bool = _env_bool('ENABLE_CORRELATION_ID', True)
+
+
+# ---------------------------------------------------------------------------
 # Application-wide config singleton
 # ---------------------------------------------------------------------------
 @dataclass
@@ -256,6 +269,7 @@ class SoundShieldConfig:
     web: WebAppConfig = field(default_factory=WebAppConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
+    logging_config: LoggingConfig = field(default_factory=LoggingConfig)
 
     # Application metadata
     version: str = '1.1.0'
