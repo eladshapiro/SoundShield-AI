@@ -1230,6 +1230,35 @@ def auth_list_users():
     return jsonify({'data': user_store.list_users()})
 
 
+@app.route('/api/v1/users/<int:user_id>', methods=['DELETE'])
+@require_role('admin')
+def api_delete_user(user_id):
+    """Delete (deactivate) a user."""
+    try:
+        user_store.deactivate_user(user_id)
+        audit.log('user_deactivated', details={'user_id': user_id},
+                  user_ip=request.remote_addr)
+        return jsonify({'success': True})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/v1/users/<int:user_id>/role', methods=['PUT'])
+@require_role('admin')
+def api_update_user_role(user_id):
+    """Update a user's role."""
+    if not request.is_json or 'role' not in request.json:
+        return jsonify({'error': 'JSON body with "role" required'}), 400
+    role = request.json['role']
+    try:
+        user_store.update_role(user_id, role)
+        audit.log('user_role_updated', details={'user_id': user_id, 'new_role': role},
+                  user_ip=request.remote_addr)
+        return jsonify({'success': True})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
 # =====================================================================
 # API v1 Endpoints
 # =====================================================================

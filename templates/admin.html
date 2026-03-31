@@ -452,6 +452,128 @@
                 </div>
             </div>
 
+            <!-- ===== 5. USER MANAGEMENT CARD ===== -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden lg:col-span-2">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white" x-text="t('userManagement')"></h3>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="showCreateUser = !showCreateUser"
+                                class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors">
+                            + <span x-text="t('newUser')"></span>
+                        </button>
+                        <button @click="loadUsers()" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" :aria-label="t('refresh')">
+                            <svg class="w-4 h-4" :class="{ 'animate-spin': usersLoading }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6 space-y-4">
+                    <!-- Create User Form -->
+                    <div x-show="showCreateUser" x-transition class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <input x-model="newUser.username" type="text" :placeholder="t('username')"
+                                   class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
+                            <input x-model="newUser.password" type="password" :placeholder="t('password')"
+                                   class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
+                            <select x-model="newUser.role"
+                                    class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
+                                <option value="viewer">Viewer</option>
+                                <option value="analyst">Analyst</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="createUser()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors">
+                                <span x-text="t('create')"></span>
+                            </button>
+                            <button @click="showCreateUser = false" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 text-sm rounded-lg transition-colors">
+                                <span x-text="t('cancel')"></span>
+                            </button>
+                        </div>
+                        <p x-show="createError" class="text-sm text-red-500" x-text="createError"></p>
+                    </div>
+
+                    <!-- Loading skeleton -->
+                    <template x-if="usersLoading && users.length === 0">
+                        <div class="space-y-3 animate-pulse">
+                            <div class="h-8 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                            <div class="h-8 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                            <div class="h-8 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                        </div>
+                    </template>
+
+                    <!-- Users Table -->
+                    <template x-if="!(usersLoading && users.length === 0)">
+                        <div>
+                            <!-- Empty state -->
+                            <template x-if="users.length === 0">
+                                <div class="text-center py-8">
+                                    <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                                    </svg>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="t('noUsers')"></p>
+                                </div>
+                            </template>
+                            <!-- Table -->
+                            <template x-if="users.length > 0">
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm">
+                                        <thead>
+                                            <tr class="border-b border-gray-200 dark:border-gray-700">
+                                                <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
+                                                <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('username')"></th>
+                                                <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('role')"></th>
+                                                <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('created')"></th>
+                                                <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('lastLogin')"></th>
+                                                <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('status')"></th>
+                                                <th class="text-start py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" x-text="t('actions')"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                            <template x-for="user in users" :key="user.id">
+                                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
+                                                    <td class="py-2 px-3 text-gray-900 dark:text-gray-100" x-text="user.id"></td>
+                                                    <td class="py-2 px-3 font-medium text-gray-900 dark:text-gray-100" x-text="user.username"></td>
+                                                    <td class="py-2 px-3">
+                                                        <select :value="user.role" @change="updateRole(user.id, $event.target.value)"
+                                                                class="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                                            <option value="viewer">Viewer</option>
+                                                            <option value="analyst">Analyst</option>
+                                                            <option value="admin">Admin</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="py-2 px-3 text-gray-500 dark:text-gray-400 text-xs">
+                                                        <span x-text="formatTimestamp(user.created_at) || '-'"></span>
+                                                    </td>
+                                                    <td class="py-2 px-3 text-gray-500 dark:text-gray-400 text-xs">
+                                                        <span x-text="user.last_login ? formatTimestamp(user.last_login) : t('never')"></span>
+                                                    </td>
+                                                    <td class="py-2 px-3">
+                                                        <span class="px-2 py-0.5 text-xs rounded-full"
+                                                              :class="user.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'"
+                                                              x-text="user.is_active ? t('active') : t('inactive')"></span>
+                                                    </td>
+                                                    <td class="py-2 px-3">
+                                                        <button @click="deleteUser(user.id, user.username)"
+                                                                class="text-red-500 hover:text-red-700 text-xs font-medium"
+                                                                x-show="user.username !== 'admin'"
+                                                                x-text="t('delete')"></button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
         </div><!-- end grid -->
     </main>
 
@@ -590,6 +712,31 @@
             noAuditEntries: 'No audit log entries found',
             loadMore: 'Load More',
             loading: 'Loading...',
+
+            // User Management
+            userManagement: 'User Management',
+            newUser: 'New User',
+            username: 'Username',
+            password: 'Password',
+            role: 'Role',
+            created: 'Created',
+            lastLogin: 'Last Login',
+            status: 'Status',
+            actions: 'Actions',
+            create: 'Create',
+            cancel: 'Cancel',
+            delete: 'Delete',
+            active: 'Active',
+            inactive: 'Inactive',
+            never: 'Never',
+            noUsers: 'No users found',
+            userCreated: 'User created successfully',
+            userCreateError: 'Failed to create user',
+            userDeleted: 'User deactivated successfully',
+            userDeleteError: 'Failed to deactivate user',
+            roleUpdated: 'Role updated successfully',
+            roleUpdateError: 'Failed to update role',
+            confirmDeleteUser: 'Delete user',
         },
         he: {
             pageTitle: 'SoundShield-AI - לוח ניהול',
@@ -694,6 +841,31 @@
             noAuditEntries: 'לא נמצאו רשומות ביומן הביקורת',
             loadMore: 'טען עוד',
             loading: 'טוען...',
+
+            // User Management
+            userManagement: 'ניהול משתמשים',
+            newUser: 'משתמש חדש',
+            username: 'שם משתמש',
+            password: 'סיסמה',
+            role: 'תפקיד',
+            created: 'נוצר',
+            lastLogin: 'כניסה אחרונה',
+            status: 'סטטוס',
+            actions: 'פעולות',
+            create: 'צור',
+            cancel: 'ביטול',
+            delete: 'מחק',
+            active: 'פעיל',
+            inactive: 'לא פעיל',
+            never: 'מעולם לא',
+            noUsers: 'לא נמצאו משתמשים',
+            userCreated: 'המשתמש נוצר בהצלחה',
+            userCreateError: 'יצירת המשתמש נכשלה',
+            userDeleted: 'המשתמש הושבת בהצלחה',
+            userDeleteError: 'השבתת המשתמש נכשלה',
+            roleUpdated: 'התפקיד עודכן בהצלחה',
+            roleUpdateError: 'עדכון התפקיד נכשל',
+            confirmDeleteUser: 'מחק משתמש',
         }
     };
 
@@ -731,6 +903,13 @@
             auditLimit: 20,
             auditHasMore: false,
 
+            // User Management
+            users: [],
+            usersLoading: true,
+            showCreateUser: false,
+            newUser: { username: '', password: '', role: 'viewer' },
+            createError: '',
+
             /* ---------- Lifecycle ---------- */
             init() {
                 // Restore preferences
@@ -754,6 +933,7 @@
                 this.loadStats();
                 this.loadThresholds();
                 this.loadAuditLog(true);
+                this.loadUsers();
             },
 
             /* ---------- Translation ---------- */
@@ -1009,6 +1189,100 @@
             loadMoreAudit() {
                 this.auditOffset += this.auditLimit;
                 this.loadAuditLog(false);
+            },
+
+            /* ---------- User Management ---------- */
+            async loadUsers() {
+                this.usersLoading = true;
+                try {
+                    const token = localStorage.getItem('token');
+                    const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                    const res = await fetch('/api/v1/auth/users', { headers });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    this.users = data.data || [];
+                } catch (e) {
+                    console.error('Failed to load users:', e);
+                    this.users = [];
+                } finally {
+                    this.usersLoading = false;
+                }
+            },
+
+            async createUser() {
+                this.createError = '';
+                if (!this.newUser.username || !this.newUser.password) {
+                    this.createError = 'Username and password are required';
+                    return;
+                }
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch('/api/v1/auth/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                        },
+                        body: JSON.stringify(this.newUser)
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        this.createError = data.error || 'Unknown error';
+                        return;
+                    }
+                    this.showCreateUser = false;
+                    this.newUser = { username: '', password: '', role: 'viewer' };
+                    this.showToast(this.t('userCreated'), 'success');
+                    this.loadUsers();
+                } catch (e) {
+                    console.error('Failed to create user:', e);
+                    this.createError = e.message;
+                }
+            },
+
+            async updateRole(userId, role) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`/api/v1/users/${userId}/role`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                        },
+                        body: JSON.stringify({ role })
+                    });
+                    if (!res.ok) {
+                        const data = await res.json();
+                        throw new Error(data.error || `HTTP ${res.status}`);
+                    }
+                    this.showToast(this.t('roleUpdated'), 'success');
+                    this.loadUsers();
+                } catch (e) {
+                    console.error('Failed to update role:', e);
+                    this.showToast(this.t('roleUpdateError') + ': ' + e.message, 'error');
+                    this.loadUsers();
+                }
+            },
+
+            async deleteUser(userId, username) {
+                const msg = this.t('confirmDeleteUser') + ` "${username}"?`;
+                if (!confirm(msg)) return;
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`/api/v1/users/${userId}`, {
+                        method: 'DELETE',
+                        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+                    });
+                    if (!res.ok) {
+                        const data = await res.json();
+                        throw new Error(data.error || `HTTP ${res.status}`);
+                    }
+                    this.showToast(this.t('userDeleted'), 'success');
+                    this.loadUsers();
+                } catch (e) {
+                    console.error('Failed to delete user:', e);
+                    this.showToast(this.t('userDeleteError') + ': ' + e.message, 'error');
+                }
             },
 
             /* ---------- Helpers ---------- */

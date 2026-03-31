@@ -21,7 +21,7 @@ python example_usage.py                   # Generate synthetic audio and run ana
 python benchmark.py                       # Performance benchmark for all detectors
 
 # Tests
-python -m pytest tests/                   # Full test suite (110 tests, unittest-based)
+python -m pytest tests/                   # Full test suite (138 tests, unittest-based)
 python -m pytest tests/test_api.py        # API endpoint smoke tests
 python -m pytest tests/test_integration.py # Full pipeline integration tests
 python run_system_test.py                 # End-to-end test on synthetic audio
@@ -150,16 +150,16 @@ Static files: `static/css/main.css`, `static/js/{app,upload,waveform,charts,moda
 
 | File | Module | Tests |
 |------|--------|-------|
-| `tests/test_main.py` | KindergartenRecordingAnalyzer | 22 |
-| `tests/test_emotion_detector.py` | EmotionDetector | 3 |
-| `tests/test_cry_detector.py` | CryDetector | 11 |
-| `tests/test_violence_detector.py` | ViolenceDetector | 14 |
+| `tests/test_main.py` | KindergartenRecordingAnalyzer | 11 |
+| `tests/test_emotion_detector.py` | EmotionDetector | 14 |
+| `tests/test_cry_detector.py` | CryDetector | 10 |
+| `tests/test_violence_detector.py` | ViolenceDetector | 13 |
 | `tests/test_neglect_detector.py` | NeglectDetector | 12 |
 | `tests/test_inappropriate_language_detector.py` | InappropriateLanguageDetector | 7 |
 | `tests/test_database.py` | Database | 5 |
 | `tests/test_config.py` | Config system | 15 |
 | `tests/test_integration.py` | Full pipeline + notifications | 12 |
-| `tests/test_api.py` | API endpoints (Flask client) | 34 |
+| `tests/test_api.py` | API endpoints (Flask client) | 39 |
 
 ## Commit Convention
 

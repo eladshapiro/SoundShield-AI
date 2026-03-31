@@ -149,6 +149,39 @@ class UserStore:
         finally:
             conn.close()
 
+    def deactivate_user(self, user_id: int):
+        """Deactivate a user (soft delete)."""
+        conn = self._get_conn()
+        try:
+            # Don't allow deactivating the last admin
+            row = conn.execute('SELECT role FROM users WHERE id = ?', (user_id,)).fetchone()
+            if not row:
+                raise ValueError(f"User {user_id} not found")
+            if row['role'] == 'admin':
+                admin_count = conn.execute(
+                    "SELECT COUNT(*) as c FROM users WHERE role = 'admin' AND is_active = 1"
+                ).fetchone()['c']
+                if admin_count <= 1:
+                    raise ValueError("Cannot deactivate the last admin user")
+            conn.execute('UPDATE users SET is_active = 0 WHERE id = ?', (user_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def update_role(self, user_id: int, role: str):
+        """Update a user's role."""
+        if role not in ROLE_HIERARCHY:
+            raise ValueError(f"Invalid role: {role}. Must be one of: {list(ROLE_HIERARCHY.keys())}")
+        conn = self._get_conn()
+        try:
+            row = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
+            if not row:
+                raise ValueError(f"User {user_id} not found")
+            conn.execute('UPDATE users SET role = ? WHERE id = ?', (role, user_id))
+            conn.commit()
+        finally:
+            conn.close()
+
 
 def generate_token(user: dict) -> str:
     """Generate a JWT token for an authenticated user."""

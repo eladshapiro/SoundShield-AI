@@ -314,6 +314,33 @@ class TestAPIEndpoints(unittest.TestCase):
         self.assertEqual(data['user']['username'], 'admin')
         self.assertEqual(data['user']['role'], 'admin')
 
+    def test_user_role_update(self):
+        """Test updating a user's role."""
+        # First create a user
+        self.client.post('/api/v1/auth/register',
+            json={'username': 'roletest', 'password': 'testpass', 'role': 'viewer'})
+        # Get user list to find the ID
+        resp = self.client.get('/api/v1/auth/users')
+        users = resp.get_json()['data']
+        user = next((u for u in users if u['username'] == 'roletest'), None)
+        if user:
+            # Update role
+            response = self.client.put(f'/api/v1/users/{user["id"]}/role',
+                json={'role': 'analyst'})
+            self.assertEqual(response.status_code, 200)
+
+    def test_user_deactivate(self):
+        """Test deactivating a user."""
+        # Create a user to deactivate
+        self.client.post('/api/v1/auth/register',
+            json={'username': 'deltest', 'password': 'testpass', 'role': 'viewer'})
+        resp = self.client.get('/api/v1/auth/users')
+        users = resp.get_json()['data']
+        user = next((u for u in users if u['username'] == 'deltest'), None)
+        if user:
+            response = self.client.delete(f'/api/v1/users/{user["id"]}')
+            self.assertEqual(response.status_code, 200)
+
 
 if __name__ == '__main__':
     unittest.main()

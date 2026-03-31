@@ -272,7 +272,7 @@ class SoundShieldConfig:
     logging_config: LoggingConfig = field(default_factory=LoggingConfig)
 
     # Application metadata
-    version: str = '1.1.0'
+    version: str = '2.0.0'
     app_name: str = 'SoundShield-AI'
 
 
