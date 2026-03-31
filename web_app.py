@@ -386,6 +386,11 @@ def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+@app.route('/login')
+def login_page():
+    """Serve the login page."""
+    return render_template('login.html')
+
 @app.route('/')
 def index():
     """Main page"""
@@ -1166,6 +1171,56 @@ def auth_register():
         return jsonify({'success': True, 'user': user}), 201
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/v1/auth/me', methods=['GET'])
+@require_role('viewer')
+def auth_me():
+    """Get current user profile."""
+    from flask import g
+    # If a real token was provided, prefer the decoded token user over anonymous
+    user = g.get('current_user', {})
+    token_user = get_current_user()
+    if token_user:
+        user = token_user
+    return jsonify({
+        'user': {
+            'id': user.get('id') or user.get('user_id', 0),
+            'username': user.get('username', 'anonymous'),
+            'role': user.get('role', 'viewer')
+        }
+    })
+
+
+@app.route('/api/v1/auth/refresh', methods=['POST'])
+@require_role('viewer')
+def auth_refresh():
+    """Refresh JWT token (extends expiry)."""
+    from flask import g
+    # If a real token was provided, prefer the decoded token user over anonymous
+    user = g.get('current_user', {})
+    token_user = get_current_user()
+    if token_user:
+        user = token_user
+
+    user_id = user.get('id') or user.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    # Look up user to ensure they still exist and are active
+    db_user = user_store.authenticate_by_id(user_id)
+    if not db_user:
+        return jsonify({'error': 'User no longer active'}), 401
+
+    new_token = generate_token(db_user)
+    return jsonify({
+        'token': new_token,
+        'user': {
+            'id': db_user['id'],
+            'username': db_user['username'],
+            'role': db_user['role']
+        }
+    })
 
 
 @app.route('/api/v1/auth/users', methods=['GET'])

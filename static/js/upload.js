@@ -219,6 +219,10 @@ function uploadManager() {
         });
 
         xhr.open('POST', '/upload');
+        const token = localStorage.getItem('token');
+        if (token) {
+            xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        }
         xhr.send(formData);
       });
 

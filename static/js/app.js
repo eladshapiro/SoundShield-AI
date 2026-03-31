@@ -110,7 +110,32 @@ const translations = {
   seconds:             { en: 'seconds',                    he: '\u05E9\u05E0\u05D9\u05D5\u05EA' },
   minutes:             { en: 'minutes',                    he: '\u05D3\u05E7\u05D5\u05EA' },
   of:                  { en: 'of',                         he: '\u05DE\u05EA\u05D5\u05DA' },
+
+  /* ---- Auth ---- */
+  loginBtn:            { en: 'Sign In',              he: '\u05DB\u05E0\u05D9\u05E1\u05D4' },
+  logoutBtn:           { en: 'Sign Out',             he: '\u05D4\u05EA\u05E0\u05EA\u05E7\u05D5\u05EA' },
+  welcomeUser:         { en: 'Welcome',              he: '\u05E9\u05DC\u05D5\u05DD' },
+  roleAdmin:           { en: 'Admin',                he: '\u05DE\u05E0\u05D4\u05DC' },
+  roleAnalyst:         { en: 'Analyst',              he: '\u05DE\u05E0\u05EA\u05D7' },
+  roleViewer:          { en: 'Viewer',               he: '\u05E6\u05D5\u05E4\u05D4' },
 };
+
+/* ------------------------------------------------------------------ */
+/*  Auth helpers                                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Get auth headers for API calls.
+ * Returns object with Authorization header if token exists.
+ */
+function getAuthHeaders() {
+    const token = localStorage.getItem('token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
+    }
+    return headers;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Alpine component: appState                                         */
@@ -127,6 +152,22 @@ function appState() {
     historyLoading: false,
     activeView: 'upload',        // 'upload' | 'results' | 'history'
     error: null,
+
+    /* ---- auth state ---- */
+    authToken: localStorage.getItem('token') || '',
+    currentUser: JSON.parse(localStorage.getItem('user') || 'null'),
+
+    get isLoggedIn() { return !!this.authToken; },
+    get userRole() { return this.currentUser?.role || 'viewer'; },
+    get isAdmin() { return this.userRole === 'admin'; },
+
+    logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+        window.location.href = '/login';
+    },
 
     /* ---- audio clips ---- */
     audioClips: [],

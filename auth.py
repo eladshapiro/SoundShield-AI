@@ -120,6 +120,24 @@ class UserStore:
         finally:
             conn.close()
 
+    def authenticate_by_id(self, user_id: int) -> dict:
+        """Look up a user by ID (for token refresh). Returns user dict or None."""
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                'SELECT id, username, role, is_active FROM users WHERE id = ? AND is_active = 1',
+                (user_id,)
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                'id': row['id'],
+                'username': row['username'],
+                'role': row['role']
+            }
+        finally:
+            conn.close()
+
     def list_users(self) -> list:
         """List all users (without password hashes)."""
         conn = self._get_conn()

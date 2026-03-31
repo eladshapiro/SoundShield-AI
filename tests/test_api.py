@@ -279,6 +279,41 @@ class TestAPIEndpoints(unittest.TestCase):
         response = self.client.get('/api/v1/logs?level=ERROR&limit=5')
         self.assertEqual(response.status_code, 200)
 
+    def test_auth_me_returns_user(self):
+        """Test /auth/me returns current user info."""
+        response = self.client.get('/api/v1/auth/me')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('user', data)
+        self.assertIn('username', data['user'])
+
+    def test_auth_refresh_returns_new_token(self):
+        """Test /auth/refresh returns a new token."""
+        # First login to get a token
+        login_resp = self.client.post('/api/v1/auth/login',
+            json={'username': 'admin', 'password': 'admin'})
+        token = login_resp.get_json()['token']
+
+        # Use token to refresh
+        response = self.client.post('/api/v1/auth/refresh',
+            headers={'Authorization': f'Bearer {token}'})
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('token', data)
+
+    def test_auth_me_with_token(self):
+        """Test /auth/me with valid JWT token."""
+        login_resp = self.client.post('/api/v1/auth/login',
+            json={'username': 'admin', 'password': 'admin'})
+        token = login_resp.get_json()['token']
+
+        response = self.client.get('/api/v1/auth/me',
+            headers={'Authorization': f'Bearer {token}'})
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['user']['username'], 'admin')
+        self.assertEqual(data['user']['role'], 'admin')
+
 
 if __name__ == '__main__':
     unittest.main()
