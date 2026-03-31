@@ -477,7 +477,7 @@ def upload_file():
                 cid = set_correlation_id()
                 _logging.getLogger('soundshield.api').info(
                     f"Analysis started for {filename}",
-                    extra={'event': 'analysis_start', 'filename': filename}
+                    extra={'event': 'analysis_start', 'audio_file': filename}
                 )
 
             # Initialize progress tracking for this specific analysis
