@@ -1026,6 +1026,135 @@ class ReportGenerator:
         
         logger.info(f"CSV report saved: {filepath}")
 
+    def generate_pdf_report(self, results, filename="analysis_report.pdf"):
+        """Generate a PDF report from analysis results."""
+        try:
+            from fpdf import FPDF
+        except ImportError:
+            return None
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        # Title
+        pdf.set_font('Helvetica', 'B', 20)
+        pdf.cell(0, 15, 'SoundShield-AI Analysis Report', new_x='LMARGIN', new_y='NEXT', align='C')
+        pdf.set_font('Helvetica', '', 10)
+        pdf.cell(0, 8, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', new_x='LMARGIN', new_y='NEXT', align='C')
+        pdf.ln(5)
+
+        # Severity banner
+        severity = results.get('severity_level', 'unknown').upper()
+        severity_colors = {
+            'CRITICAL': (220, 38, 38),
+            'HIGH': (234, 88, 12),
+            'MEDIUM': (202, 138, 4),
+            'LOW': (22, 163, 74),
+            'NONE': (107, 114, 128),
+            'UNKNOWN': (107, 114, 128),
+        }
+        color = severity_colors.get(severity, (107, 114, 128))
+        pdf.set_fill_color(*color)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.cell(0, 12, f'  Severity: {severity}', new_x='LMARGIN', new_y='NEXT', fill=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(5)
+
+        # Summary section
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.cell(0, 10, 'Summary', new_x='LMARGIN', new_y='NEXT')
+        pdf.set_font('Helvetica', '', 10)
+
+        summary_fields = [
+            ('Language', results.get('language', 'N/A')),
+            ('Duration', f"{results.get('audio_duration', 0):.1f} seconds"),
+            ('Confidence Score', f"{results.get('confidence_score', 0):.2f}"),
+            ('ML-Backed', 'Yes' if results.get('ml_backed', False) else 'No'),
+        ]
+        for label, value in summary_fields:
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.cell(50, 7, f'{label}:', new_x='RIGHT')
+            pdf.set_font('Helvetica', '', 10)
+            pdf.cell(0, 7, str(value), new_x='LMARGIN', new_y='NEXT')
+        pdf.ln(5)
+
+        # Incidents section
+        incidents = results.get('incidents', [])
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.cell(0, 10, f'Incidents ({len(incidents)})', new_x='LMARGIN', new_y='NEXT')
+
+        if incidents:
+            # Table header
+            pdf.set_font('Helvetica', 'B', 9)
+            pdf.set_fill_color(229, 231, 235)
+            col_widths = [15, 35, 55, 30, 55]
+            headers = ['#', 'Type', 'Description', 'Severity', 'Time']
+            for i, h in enumerate(headers):
+                pdf.cell(col_widths[i], 8, h, border=1, fill=True)
+            pdf.ln()
+
+            # Table rows
+            pdf.set_font('Helvetica', '', 8)
+            for idx, incident in enumerate(incidents, 1):
+                row_data = [
+                    str(idx),
+                    str(incident.get('type', 'N/A'))[:20],
+                    str(incident.get('description', 'N/A'))[:35],
+                    str(incident.get('severity', 'N/A')),
+                    f"{incident.get('start_time', 0):.1f}s - {incident.get('end_time', 0):.1f}s",
+                ]
+                for i, cell_data in enumerate(row_data):
+                    pdf.cell(col_widths[i], 7, cell_data, border=1)
+                pdf.ln()
+        else:
+            pdf.set_font('Helvetica', 'I', 10)
+            pdf.cell(0, 8, 'No incidents detected.', new_x='LMARGIN', new_y='NEXT')
+        pdf.ln(5)
+
+        # Detection results sections
+        detection_sections = [
+            ('Emotion Analysis', 'emotion_analysis'),
+            ('Cry Detection', 'cry_detection'),
+            ('Violence Detection', 'violence_detection'),
+            ('Neglect Indicators', 'neglect_detection'),
+            ('Language Analysis', 'language_analysis'),
+        ]
+
+        for title, key in detection_sections:
+            data = results.get(key, {})
+            if not data:
+                continue
+
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.cell(0, 10, title, new_x='LMARGIN', new_y='NEXT')
+            pdf.set_font('Helvetica', '', 9)
+
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if isinstance(v, (list, dict)):
+                        pdf.set_font('Helvetica', 'B', 9)
+                        pdf.cell(0, 6, f'{k}:', new_x='LMARGIN', new_y='NEXT')
+                        pdf.set_font('Helvetica', '', 8)
+                        text = str(v)
+                        if len(text) > 200:
+                            text = text[:200] + '...'
+                        pdf.multi_cell(0, 5, f'  {text}')
+                    else:
+                        pdf.cell(60, 6, f'{k}:', new_x='RIGHT')
+                        pdf.cell(0, 6, str(v)[:80], new_x='LMARGIN', new_y='NEXT')
+            pdf.ln(3)
+
+        # Footer
+        pdf.set_font('Helvetica', 'I', 8)
+        pdf.cell(0, 10, 'This report was generated by SoundShield-AI. For internal use only.', new_x='LMARGIN', new_y='NEXT', align='C')
+
+        # Save
+        output_path = os.path.join(self.output_dir, filename)
+        pdf.output(output_path)
+        return output_path
+
 
 if __name__ == "__main__":
     generator = ReportGenerator()

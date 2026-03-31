@@ -44,6 +44,53 @@ else:
 
 register_error_handlers(app)
 
+# Security: SECRET_KEY
+app.config['SECRET_KEY'] = config.security.secret_key
+
+# Rate limiting (graceful: disabled if flask-limiter not installed)
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=[config.security.rate_limit_default],
+        storage_uri="memory://",
+    )
+except ImportError:
+    limiter = None
+
+
+def rate_limit(limit_string):
+    """Apply rate limit if flask-limiter is available."""
+    def decorator(f):
+        if limiter is not None:
+            return limiter.limit(limit_string)(f)
+        return f
+    return decorator
+
+
+# Security headers
+@app.after_request
+def add_security_headers(response):
+    if config.security.enable_security_headers:
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self' ws: wss:; "
+            "media-src 'self' blob:"
+        )
+        if not app.debug:
+            response.headers['Strict-Transport-Security'] = f'max-age={config.security.hsts_max_age}; includeSubDomains'
+    return response
+
 # Configuration — driven by config.py
 UPLOAD_FOLDER = config.web.upload_folder
 REPORTS_FOLDER = config.web.reports_folder
@@ -70,6 +117,8 @@ progress_tracking = {}
 sse_queues = {}
 # Async job results
 job_results = {}
+# Batch job tracking
+batch_jobs = {}
 # Default progress for backward compatibility
 current_progress = {
     'status': 'idle',
@@ -327,11 +376,13 @@ def index():
     return render_template('index.html')
 
 @app.route('/admin')
+@rate_limit(config.security.rate_limit_api)
 def admin_dashboard():
     """Admin dashboard for system monitoring and threshold tuning."""
     return render_template('admin.html')
 
 @app.route('/upload', methods=['POST'])
+@rate_limit(config.security.rate_limit_upload)
 def upload_file():
     """Handle file upload and analysis"""
     try:
@@ -723,6 +774,7 @@ def serve_uploaded_audio(filename):
 
 
 @app.route('/upload-async', methods=['POST'])
+@rate_limit(config.security.rate_limit_upload)
 def upload_file_async():
     """Handle file upload and start async analysis. Returns job_id immediately."""
     try:
@@ -806,6 +858,139 @@ def _run_analysis_async(filepath, filename, language):
         update_progress('error', str(e), filename=filename)
         job_results[filename] = {'status': 'error', 'error': str(e)}
         raise
+
+
+@app.route('/api/v1/batch-upload', methods=['POST'])
+def batch_upload():
+    """Upload multiple files for batch analysis."""
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files provided', 'hint': 'Use field name "files" for file upload'}), 400
+
+    files = request.files.getlist('files')
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({'error': 'No files selected'}), 400
+
+    language = request.form.get('language', 'en')
+    if language not in config.pipeline.supported_languages:
+        return jsonify({'error': f'Unsupported language: {language}'}), 400
+
+    batch_id = f"batch_{int(time.time())}_{os.urandom(4).hex()}"
+    batch_jobs[batch_id] = {
+        'status': 'processing',
+        'created_at': datetime.now().isoformat(),
+        'language': language,
+        'total_files': 0,
+        'completed': 0,
+        'failed': 0,
+        'results': {}
+    }
+
+    valid_files = []
+    for f in files:
+        if f.filename == '':
+            continue
+        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+        if ext not in ALLOWED_EXTENSIONS:
+            batch_jobs[batch_id]['results'][f.filename] = {
+                'status': 'rejected',
+                'error': f'Unsupported format: .{ext}'
+            }
+            continue
+
+        filename = secure_filename(f.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"batch_{batch_id}_{filename}")
+        f.save(filepath)
+        valid_files.append((filename, filepath))
+
+    if not valid_files:
+        batch_jobs[batch_id]['status'] = 'completed'
+        batch_jobs[batch_id]['total_files'] = 0
+        return jsonify({'batch_id': batch_id, 'status': 'completed', 'message': 'No valid files to process'}), 200
+
+    batch_jobs[batch_id]['total_files'] = len(valid_files)
+
+    # Submit each file to the thread pool
+    for filename, filepath in valid_files:
+        batch_jobs[batch_id]['results'][filename] = {'status': 'queued'}
+        executor.submit(_process_batch_file, batch_id, filename, filepath, language)
+
+    audit.log('batch_upload', details={
+        'batch_id': batch_id,
+        'file_count': len(valid_files),
+        'language': language
+    })
+
+    return jsonify({
+        'batch_id': batch_id,
+        'status': 'processing',
+        'total_files': len(valid_files),
+        'rejected': {k: v for k, v in batch_jobs[batch_id]['results'].items() if v.get('status') == 'rejected'}
+    }), 202
+
+
+def _process_batch_file(batch_id, filename, filepath, language):
+    """Process a single file in a batch job."""
+    global analyzer
+    try:
+        batch_jobs[batch_id]['results'][filename] = {'status': 'processing'}
+
+        if analyzer is None:
+            analyzer = KindergartenRecordingAnalyzer(language=language)
+
+        results = analyzer.analyze_audio_file(filepath)
+
+        # Store in database if available
+        analysis_id = None
+        if db:
+            analysis_id = db.save_analysis(filename, results)
+
+        batch_jobs[batch_id]['results'][filename] = {
+            'status': 'completed',
+            'analysis_id': analysis_id,
+            'severity': results.get('severity_level', 'unknown'),
+            'incidents_count': len(results.get('incidents', []))
+        }
+        batch_jobs[batch_id]['completed'] += 1
+
+    except Exception as e:
+        batch_jobs[batch_id]['results'][filename] = {
+            'status': 'failed',
+            'error': str(e)
+        }
+        batch_jobs[batch_id]['failed'] += 1
+    finally:
+        # Clean up uploaded file
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
+
+        # Check if batch is complete
+        completed = batch_jobs[batch_id]['completed']
+        failed = batch_jobs[batch_id]['failed']
+        total = batch_jobs[batch_id]['total_files']
+        if completed + failed >= total:
+            batch_jobs[batch_id]['status'] = 'completed'
+
+
+@app.route('/api/v1/batch/<batch_id>/status', methods=['GET'])
+def batch_status(batch_id):
+    """Get status of a batch processing job."""
+    if batch_id not in batch_jobs:
+        return jsonify({'error': 'Batch job not found'}), 404
+
+    job = batch_jobs[batch_id]
+    return jsonify({
+        'batch_id': batch_id,
+        'status': job['status'],
+        'created_at': job['created_at'],
+        'language': job['language'],
+        'total_files': job['total_files'],
+        'completed': job['completed'],
+        'failed': job['failed'],
+        'progress': f"{job['completed'] + job['failed']}/{job['total_files']}",
+        'results': job['results']
+    })
 
 
 @app.route('/job-status/<job_id>')
@@ -927,6 +1112,35 @@ def api_get_analysis(analysis_id):
             'incidents': [dict(i) for i in incidents],
         }
     })
+
+
+@app.route('/api/v1/analyses/<int:analysis_id>/export', methods=['GET'])
+def export_analysis(analysis_id):
+    """Export analysis as PDF."""
+    export_format = request.args.get('format', 'pdf')
+    if export_format != 'pdf':
+        return jsonify({'error': f'Unsupported format: {export_format}', 'supported': ['pdf']}), 400
+
+    if not db:
+        return jsonify({'error': 'Database not available'}), 503
+
+    analysis = db.get_analysis(analysis_id)
+    if not analysis:
+        return jsonify({'error': 'Analysis not found'}), 404
+
+    results = json.loads(analysis['results_json']) if isinstance(analysis['results_json'], str) else analysis['results_json']
+
+    from report_generator import ReportGenerator
+    generator = ReportGenerator(output_dir=app.config['REPORTS_FOLDER'])
+    pdf_filename = f"report_{analysis_id}_{int(time.time())}.pdf"
+    pdf_path = generator.generate_pdf_report(results, filename=pdf_filename)
+
+    if not pdf_path or not os.path.exists(pdf_path):
+        return jsonify({'error': 'PDF generation failed. Install fpdf2: pip install fpdf2'}), 500
+
+    audit.log('export_report', details={'analysis_id': analysis_id, 'format': 'pdf'})
+
+    return send_file(pdf_path, as_attachment=True, download_name=pdf_filename, mimetype='application/pdf')
 
 
 @app.route('/api/v1/analyses/<int:analysis_id>', methods=['DELETE'])

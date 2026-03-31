@@ -192,6 +192,19 @@ class AdvancedAnalyzerConfig:
 
 
 # ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+@dataclass
+class SecurityConfig:
+    secret_key: str = _env_str('SECRET_KEY', 'soundshield-dev-key-change-in-production')
+    rate_limit_default: str = _env_str('RATE_LIMIT_DEFAULT', '60/minute')
+    rate_limit_upload: str = _env_str('RATE_LIMIT_UPLOAD', '10/minute')
+    rate_limit_api: str = _env_str('RATE_LIMIT_API', '120/minute')
+    enable_security_headers: bool = _env_bool('ENABLE_SECURITY_HEADERS', True)
+    hsts_max_age: int = _env_int('HSTS_MAX_AGE', 31536000)
+
+
+# ---------------------------------------------------------------------------
 # Web Application
 # ---------------------------------------------------------------------------
 @dataclass
@@ -239,6 +252,7 @@ class SoundShieldConfig:
     neglect: NeglectDetectorConfig = field(default_factory=NeglectDetectorConfig)
     language: LanguageDetectorConfig = field(default_factory=LanguageDetectorConfig)
     advanced: AdvancedAnalyzerConfig = field(default_factory=AdvancedAnalyzerConfig)
+    security: SecurityConfig = field(default_factory=SecurityConfig)
     web: WebAppConfig = field(default_factory=WebAppConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
