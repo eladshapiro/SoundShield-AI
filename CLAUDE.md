@@ -57,6 +57,9 @@ docker build -t soundshield-ai .          # Build image only
 - `ReportGenerator` (`report_generator.py`) — JSON/HTML/CSV reports with **Chart.js** visualizations, timeline bar, confidence-weighted severity scoring
 - `AuditLogger` (`audit_logger.py`) — append-only audit trail for compliance (uploads, analyses, views, deletions)
 - `NotificationManager` (`notifications.py`) — real-time alert system with webhook support, in-app notifications, severity classification
+- `Auth` (`auth.py`) — JWT authentication (PyJWT + bcrypt), `UserStore` with SQLite-backed users table, `@require_role` decorator with 3-tier RBAC (viewer/analyst/admin), token generation/validation. Auth disabled by default (`AUTH_ENABLED=False`)
+- `Validators` (`validators.py`) — SSRF-protected webhook URL validation (blocks private IPs, file://, localhost), language parameter validation, threshold bounds checking (NaN/Inf/range), audio file magic byte verification
+- `StructuredLogging` (`structured_logging.py`) — JSON logging via python-json-logger, `ContextVar`-based correlation IDs for request tracing, `StepTimer` context manager for pipeline step timing, configurable log format (json/text)
 - `ModelOptimizer` (`model_optimizer.py`) — ONNX export for HuBERT, INT8 quantization, optimized inference, benchmarking
 - `LiveAudioProcessor` (`live_monitor.py`) — WebSocket streaming audio analysis with Socket.IO
 - `APIError` (`api_errors.py`) — standardized error response format for all API endpoints
@@ -113,6 +116,13 @@ Static files: `static/css/main.css`, `static/js/{app,upload,waveform,charts,moda
 - `GET /api/v1/webhooks` — List webhooks
 - `POST /api/v1/webhooks` — Add webhook
 - `DELETE /api/v1/webhooks` — Remove webhook
+- `POST /api/v1/auth/login` — Authenticate, receive JWT token
+- `POST /api/v1/auth/register` — Create user (admin only)
+- `GET /api/v1/auth/users` — List users (admin only)
+- `POST /api/v1/batch-upload` — Multi-file batch upload
+- `GET /api/v1/batch/<id>/status` — Batch job progress
+- `GET /api/v1/analyses/<id>/export?format=pdf` — PDF report export
+- `GET /api/v1/logs` — Query structured log entries (filterable)
 
 ## Key Technical Details
 
@@ -128,6 +138,13 @@ Static files: `static/css/main.css`, `static/js/{app,upload,waveform,charts,moda
 - **CI/CD**: GitHub Actions workflow with test, lint, security scan, Docker build jobs
 - **CORS**: configurable via `CORS_ORIGINS` env var (defaults to `*` for dev)
 - All configuration via `config.py` dataclasses + env var overrides (see `.env.example`)
+- **Authentication**: JWT-based with bcrypt password hashing; 3 roles (viewer, analyst, admin); disabled by default for dev
+- **Security headers**: CSP, X-Frame-Options, HSTS, X-Content-Type-Options via `@app.after_request`
+- **Rate limiting**: Flask-Limiter with configurable rates per endpoint category (upload: 10/min, API: 120/min)
+- **Input validation**: SSRF protection on webhooks, magic byte verification on uploads, threshold bounds checking
+- **Structured logging**: JSON format with correlation IDs for pipeline tracing; `LOG_FORMAT=json|text`
+- **PDF export**: fpdf2-based report generation with severity banners, incident tables, detection summaries
+- **New deps (Sprint 11-12)**: flask-limiter, fpdf2, PyJWT, bcrypt, python-json-logger
 
 ## Test Files
 
@@ -140,9 +157,9 @@ Static files: `static/css/main.css`, `static/js/{app,upload,waveform,charts,moda
 | `tests/test_neglect_detector.py` | NeglectDetector | 12 |
 | `tests/test_inappropriate_language_detector.py` | InappropriateLanguageDetector | 7 |
 | `tests/test_database.py` | Database | 5 |
-| `tests/test_config.py` | Config system | 11 |
+| `tests/test_config.py` | Config system | 15 |
 | `tests/test_integration.py` | Full pipeline + notifications | 12 |
-| `tests/test_api.py` | API endpoints (Flask client) | 15 |
+| `tests/test_api.py` | API endpoints (Flask client) | 34 |
 
 ## Commit Convention
 

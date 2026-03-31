@@ -36,18 +36,18 @@ class TestConfig(unittest.TestCase):
     def test_cry_defaults(self):
         """Cry config should have expected defaults."""
         self.assertEqual(config.cry.frequency_range, (200, 800))
-        self.assertEqual(config.cry.energy_threshold, 0.08)
+        self.assertEqual(config.cry.energy_threshold, 0.02)
         self.assertEqual(config.cry.response_window, 10.0)
 
     def test_violence_defaults(self):
         """Violence config should have expected defaults."""
         self.assertEqual(config.violence.min_energy_gate, 0.05)
-        self.assertEqual(config.violence.shouting_energy, 0.25)
+        self.assertEqual(config.violence.shouting_energy, 0.12)
 
     def test_emotion_defaults(self):
         """Emotion config should have expected defaults."""
         self.assertEqual(config.emotion.confidence_threshold, 0.6)
-        self.assertEqual(config.emotion.anger_energy, 0.15)
+        self.assertEqual(config.emotion.anger_energy, 0.08)
 
     def test_neglect_defaults(self):
         """Neglect config should have expected defaults."""

@@ -56,8 +56,8 @@ class CryDetector:
         cry_segments = []
         
         # Segment audio for analysis
-        segment_length = 2.0  # 2-second segments
-        hop_length = 0.5  # 0.5-second overlap
+        segment_length = 1.0  # 1-second segments for finer granularity
+        hop_length = 0.5  # 0.5-second hop
         segment_samples = int(segment_length * sr)
         hop_samples = int(hop_length * sr)
         
@@ -116,7 +116,9 @@ class CryDetector:
         
         # Check if frequency is in typical cry range
         cry_freq_min, cry_freq_max = self.cry_features['frequency_range']
-        features['in_cry_frequency_range'] = cry_freq_min <= features['mean_frequency'] <= cry_freq_max
+        features['in_cry_frequency_range'] = (
+            cry_freq_min <= features['mean_frequency'] <= 5000  # spectral centroid includes harmonics
+        )
         
         # Spectral rolloff (high frequency content)
         spectral_rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sr)[0]
@@ -209,7 +211,7 @@ class CryDetector:
         max_score += 2
 
         # Amplitude modulation -- sobbing pattern (weight 2)
-        if features.get('am_depth', 0) > 0.3:
+        if features.get('am_depth', 0) > 0.15:
             score += 2
         max_score += 2
 
@@ -230,8 +232,8 @@ class CryDetector:
             score += 1
         max_score += 1
         
-        # Duration check (always true for 2s segments) (weight 1)
-        if 0.5 <= 2.0 <= 10.0:
+        # Duration check (always true for 1-2s segments) (weight 1)
+        if 0.5 <= 1.0 <= 10.0:
             score += 1
         max_score += 1
         
@@ -313,13 +315,15 @@ class CryDetector:
         for current in sorted_segments[1:]:
             last = merged[-1]
             
-            # Check if segments overlap or are close (within 1 second)
-            if current['start_time'] <= last['end_time'] + 1.0:
+            # Check if segments overlap (strict overlap only for finer segmentation)
+            # Also cap merged duration at 5s to create natural reporting boundaries
+            merged_duration = max(last['end_time'], current['end_time']) - last['start_time']
+            if current['start_time'] < last['end_time'] and merged_duration <= 5.0:
                 # Merge segments
                 merged[-1] = {
                     'start_time': last['start_time'],
                     'end_time': max(last['end_time'], current['end_time']),
-                    'duration': max(last['end_time'], current['end_time']) - last['start_time'],
+                    'duration': merged_duration,
                     'features': current['features'],  # Use more recent features
                     'confidence': max(last['confidence'], current['confidence']),
                     'intensity': current['intensity'] if current['intensity'] != 'low' else last['intensity']

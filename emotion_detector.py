@@ -23,7 +23,7 @@ from config import config
 logger = logging.getLogger(__name__)
 
 # Constants
-SUPPORTED_EMOTIONS = ['anger', 'stress', 'calm', 'aggression']
+SUPPORTED_EMOTIONS = ['anger', 'stress', 'calm', 'aggression', 'distress']
 DEFAULT_CONFIDENCE_THRESHOLD = config.emotion.confidence_threshold
 MIN_SEGMENT_LENGTH_SECONDS = config.emotion.min_segment_length
 
@@ -77,6 +77,11 @@ class EmotionDetector:
                 'energy_threshold': cfg.aggression_energy,
                 'pitch_variance_threshold': cfg.aggression_pitch_variance,
                 'spectral_bandwidth_threshold': cfg.aggression_spectral_bandwidth
+            },
+            'distress': {
+                'energy_threshold': 0.02,
+                'frequency_threshold': 2000,  # spectral centroid > 2000Hz
+                'pitch_variance_threshold': 0.1,
             }
         }
         
@@ -246,15 +251,29 @@ class EmotionDetector:
                     if features['mean_energy'] > thresholds['energy_threshold']:
                         score += 0.4
                     weight_sum += 0.4
-                    
+
                     if features['mean_pitch_variance'] > thresholds['pitch_variance_threshold']:
                         score += 0.3
                     weight_sum += 0.3
-                    
+
                     if features['mean_spectral_bandwidth'] > thresholds['spectral_bandwidth_threshold']:
                         score += 0.3
                     weight_sum += 0.3
-                
+
+                elif emotion == 'distress':
+                    # Moderate energy + high frequency + pitch variation = distress (crying/whimpering)
+                    if features['mean_energy'] > thresholds['energy_threshold']:
+                        score += 0.3
+                    weight_sum += 0.3
+
+                    if features.get('mean_spectral_centroid', 0) > thresholds['frequency_threshold']:
+                        score += 0.4
+                    weight_sum += 0.4
+
+                    if features['mean_pitch_variance'] > thresholds['pitch_variance_threshold']:
+                        score += 0.3
+                    weight_sum += 0.3
+
                 # Normalize score
                 emotion_scores[emotion] = score / weight_sum if weight_sum > 0 else 0.0
                 
@@ -322,7 +341,7 @@ class EmotionDetector:
             List of concerning segments with details
         """
         concerning_segments = []
-        concerning_emotions = ['anger', 'stress', 'aggression']
+        concerning_emotions = ['anger', 'stress', 'aggression', 'distress']
         
         for segment in segment_emotions:
             emotion_analysis = segment['emotion_analysis']
@@ -427,7 +446,8 @@ class EmotionDetector:
         base_severity = {
             'anger': 'medium',
             'stress': 'low',
-            'aggression': 'high'
+            'aggression': 'high',
+            'distress': 'medium'
         }
         
         severity_map = {

@@ -67,7 +67,7 @@ class CryDetectorConfig:
         _env_int('CRY_FREQ_MAX', 800),
     )
     duration_range: Tuple[float, float] = (0.5, 10.0)
-    energy_threshold: float = _env_float('CRY_ENERGY_THRESHOLD', 0.08)
+    energy_threshold: float = _env_float('CRY_ENERGY_THRESHOLD', 0.02)
     pitch_variance_threshold: float = _env_float('CRY_PITCH_VARIANCE_THRESHOLD', 0.15)
     spectral_rolloff_threshold: float = _env_float('CRY_SPECTRAL_ROLLOFF_THRESHOLD', 0.4)
     zero_crossing_rate_threshold: float = _env_float('CRY_ZCR_THRESHOLD', 0.02)
@@ -77,7 +77,7 @@ class CryDetectorConfig:
     # Scoring
     min_score_ratio: float = _env_float('CRY_MIN_SCORE_RATIO', 0.50)
     voiced_ratio_threshold: float = _env_float('CRY_VOICED_RATIO_THRESHOLD', 0.3)
-    am_depth_threshold: float = _env_float('CRY_AM_DEPTH_THRESHOLD', 0.3)
+    am_depth_threshold: float = _env_float('CRY_AM_DEPTH_THRESHOLD', 0.15)
     spectral_flatness_threshold: float = _env_float('CRY_SPECTRAL_FLATNESS_THRESHOLD', 0.3)
     f0_std_threshold: float = _env_float('CRY_F0_STD_THRESHOLD', 20.0)
     # Response detection
@@ -99,17 +99,17 @@ class ViolenceDetectorConfig:
     merge_gap_seconds: float = _env_float('VIOLENCE_MERGE_GAP_SECONDS', 1.5)
     max_merged_duration_seconds: float = _env_float('VIOLENCE_MAX_MERGED_DURATION', 20.0)
     # Shouting thresholds
-    shouting_energy: float = _env_float('VIOLENCE_SHOUTING_ENERGY', 0.25)
+    shouting_energy: float = _env_float('VIOLENCE_SHOUTING_ENERGY', 0.12)
     shouting_freq_variance: float = _env_float('VIOLENCE_SHOUTING_FREQ_VARIANCE', 0.4)
     shouting_spectral_rolloff: float = _env_float('VIOLENCE_SHOUTING_SPECTRAL_ROLLOFF', 0.7)
     shouting_duration: float = _env_float('VIOLENCE_SHOUTING_DURATION', 0.3)
     # Aggressive tone thresholds
-    aggressive_energy: float = _env_float('VIOLENCE_AGGRESSIVE_ENERGY', 0.2)
+    aggressive_energy: float = _env_float('VIOLENCE_AGGRESSIVE_ENERGY', 0.10)
     aggressive_pitch_variance: float = _env_float('VIOLENCE_AGGRESSIVE_PITCH_VARIANCE', 0.35)
     aggressive_spectral_bandwidth: float = _env_float('VIOLENCE_AGGRESSIVE_SPECTRAL_BW', 0.6)
     aggressive_zcr: float = _env_float('VIOLENCE_AGGRESSIVE_ZCR', 0.08)
     # Threatening thresholds
-    threatening_energy: float = _env_float('VIOLENCE_THREATENING_ENERGY', 0.18)
+    threatening_energy: float = _env_float('VIOLENCE_THREATENING_ENERGY', 0.08)
     threatening_freq_low: int = _env_int('VIOLENCE_THREATENING_FREQ_LOW', 80)
     threatening_spectral_contrast: float = _env_float('VIOLENCE_THREATENING_CONTRAST', 0.5)
     threatening_duration: float = _env_float('VIOLENCE_THREATENING_DURATION', 1.0)
@@ -132,15 +132,15 @@ class EmotionDetectorConfig:
     confidence_threshold: float = _env_float('EMOTION_CONFIDENCE_THRESHOLD', 0.6)
     min_segment_length: float = _env_float('EMOTION_MIN_SEGMENT_LENGTH', 0.5)
     # Anger thresholds
-    anger_energy: float = _env_float('EMOTION_ANGER_ENERGY', 0.15)
+    anger_energy: float = _env_float('EMOTION_ANGER_ENERGY', 0.08)
     anger_pitch_variance: float = _env_float('EMOTION_ANGER_PITCH_VARIANCE', 0.3)
     anger_spectral_rolloff: float = _env_float('EMOTION_ANGER_SPECTRAL_ROLLOFF', 0.6)
     # Stress thresholds
-    stress_energy_variance: float = _env_float('EMOTION_STRESS_ENERGY_VARIANCE', 0.1)
+    stress_energy_variance: float = _env_float('EMOTION_STRESS_ENERGY_VARIANCE', 0.03)
     stress_zcr: float = _env_float('EMOTION_STRESS_ZCR', 0.05)
     stress_spectral_centroid_variance: float = _env_float('EMOTION_STRESS_SC_VARIANCE', 0.2)
     # Calm thresholds
-    calm_energy: float = _env_float('EMOTION_CALM_ENERGY', 0.05)
+    calm_energy: float = _env_float('EMOTION_CALM_ENERGY', 0.01)
     calm_pitch_stability: float = _env_float('EMOTION_CALM_PITCH_STABILITY', 0.8)
     calm_spectral_rolloff: float = _env_float('EMOTION_CALM_SPECTRAL_ROLLOFF', 0.4)
     # Aggression thresholds

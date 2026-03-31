@@ -169,23 +169,20 @@ class ViolenceDetector:
         
         return features
     
-    # Minimum absolute energy to consider any violence detection.
-    # Below this level the audio is too quiet for any violence type.
-    MIN_ENERGY_GATE = 0.05
-
     def _detect_violence_types(self, features: Dict) -> List[str]:
         """
         Detect specific types of violence based on features
         זיהוי סוגים ספציפיים של אלימות בהתבסס על תכונות
-        
+
         Args:
             features: Dictionary of audio features
-            
+
         Returns:
             List of detected violence types
         """
         # B1 FIX: energy gate -- reject all violence for quiet audio
-        if features['mean_energy'] < self.MIN_ENERGY_GATE:
+        # Uses config value (VIOLENCE_MIN_ENERGY_GATE) instead of hardcoded constant
+        if features['mean_energy'] < config.violence.min_energy_gate:
             return []
 
         detected_types = []
