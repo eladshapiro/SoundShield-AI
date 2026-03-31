@@ -413,5 +413,43 @@ class TestAPIEndpoints(unittest.TestCase):
         self.assertEqual(response.headers.get('X-Request-ID'), 'test-req-123')
 
 
+    def test_csv_export_endpoint(self):
+        """Test CSV export returns valid CSV."""
+        response = self.client.get('/api/v1/export/csv')
+        self.assertIn(response.status_code, [200, 503])
+        if response.status_code == 200:
+            self.assertIn('text/csv', response.content_type)
+
+    def test_compare_no_ids(self):
+        """Test compare without IDs returns 400."""
+        response = self.client.get('/api/v1/analyses/compare')
+        self.assertEqual(response.status_code, 400)
+
+    def test_compare_single_id(self):
+        """Test compare with single ID returns 400."""
+        response = self.client.get('/api/v1/analyses/compare?ids=1')
+        self.assertEqual(response.status_code, 400)
+
+    def test_compare_too_many(self):
+        """Test compare with >5 IDs returns 400."""
+        response = self.client.get('/api/v1/analyses/compare?ids=1,2,3,4,5,6')
+        self.assertEqual(response.status_code, 400)
+
+    def test_daily_digest(self):
+        """Test daily digest endpoint."""
+        response = self.client.get('/api/v1/digest/daily')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['period'], 'daily')
+        self.assertIn('total_analyses', data)
+
+    def test_weekly_digest(self):
+        """Test weekly digest endpoint."""
+        response = self.client.get('/api/v1/digest/weekly')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['period'], 'weekly')
+
+
 if __name__ == '__main__':
     unittest.main()

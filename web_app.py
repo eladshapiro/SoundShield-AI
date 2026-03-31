@@ -22,6 +22,8 @@ from config import (config, AudioAnalyzerConfig, CryDetectorConfig,
 from api_errors import register_error_handlers, APIError
 from audit_logger import AuditLogger
 from notifications import notifications
+from metrics import metrics
+from resilience import MemoryGuard, get_all_circuit_breakers
 from validators import validate_webhook_url, validate_language, validate_threshold_value, validate_audio_file
 from auth import UserStore, generate_token, require_role, get_current_user
 
@@ -44,6 +46,9 @@ audit = AuditLogger()
 
 # User authentication
 user_store = UserStore()
+
+# Memory guard
+memory_guard = MemoryGuard()
 
 # Initialize structured logging (conditional)
 if _structured_logging_available:
@@ -103,6 +108,12 @@ def add_request_id():
         set_correlation_id(request_id)
     except ImportError:
         pass
+
+
+@app.before_request
+def count_request():
+    """Count all incoming requests for metrics."""
+    metrics.increment('requests_total')
 
 
 # Security headers
@@ -599,6 +610,7 @@ def upload_file():
             return jsonify({'error': 'File type not supported'}), 400
     
     except Exception as e:
+        metrics.record_error(type(e).__name__, '/upload')
         print(f"Error in upload_file: {str(e)}")
         return jsonify({'error': f'Analysis error: {str(e)}'}), 500
 
@@ -879,6 +891,7 @@ def upload_file_async():
             return jsonify({'error': 'File type not supported'}), 400
 
     except Exception as e:
+        metrics.record_error(type(e).__name__, '/upload')
         return jsonify({'error': str(e)}), 500
 
 
@@ -1510,6 +1523,48 @@ def api_remove_webhook():
     return jsonify({'success': True, 'webhooks': notifications._webhooks})
 
 
+# --- Metrics endpoints ---
+
+@app.route('/metrics')
+def prometheus_metrics():
+    """Prometheus-compatible metrics endpoint."""
+    return Response(metrics.generate_prometheus_text(), mimetype='text/plain')
+
+
+@app.route('/api/v1/metrics/summary')
+def api_metrics_summary():
+    """Get application metrics summary."""
+    return jsonify(metrics.get_all_metrics())
+
+
+@app.route('/api/v1/metrics/error-rates')
+def api_error_rates():
+    """Get error rate information."""
+    window = request.args.get('window', 5, type=int)
+    return jsonify({
+        'error_rate': metrics.get_error_rate(window),
+        'summary': metrics.get_error_summary(window)
+    })
+
+
+@app.route('/api/v1/metrics/pipeline-timing')
+def api_pipeline_timing():
+    """Get pipeline step timing percentiles."""
+    return jsonify({'steps': metrics.get_step_timings()})
+
+
+@app.route('/api/v1/metrics/circuit-breakers')
+def api_circuit_breakers():
+    """Get circuit breaker statuses."""
+    return jsonify({'circuit_breakers': get_all_circuit_breakers()})
+
+
+@app.route('/api/v1/metrics/memory')
+def api_memory_usage():
+    """Get process memory usage."""
+    return jsonify(memory_guard.get_usage())
+
+
 # --- Threshold configuration endpoints ---
 
 # Mapping of detector names to config attributes
@@ -1758,6 +1813,128 @@ def api_recent_logs():
         pass
 
     return jsonify({'data': entries, 'total': len(entries)})
+
+
+@app.route('/api/v1/export/csv', methods=['GET'])
+def api_export_csv():
+    """Export analyses as CSV."""
+    import csv
+    import io as _io
+
+    if not db:
+        return jsonify({'error': 'Database not available'}), 503
+
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    risk_level = request.args.get('risk_level', '')
+
+    # Build query
+    query = 'SELECT id, filename, upload_time, duration, risk_level, overall_assessment, total_incidents, critical_incidents, language, models_used FROM analyses WHERE 1=1'
+    params = []
+    if start_date:
+        query += ' AND upload_time >= ?'
+        params.append(start_date)
+    if end_date:
+        query += ' AND upload_time <= ?'
+        params.append(end_date)
+    if risk_level:
+        query += ' AND risk_level = ?'
+        params.append(risk_level)
+    query += ' ORDER BY upload_time DESC LIMIT 1000'
+
+    conn = db._get_conn()
+    try:
+        rows = conn.execute(query, params).fetchall()
+    finally:
+        conn.close()
+
+    output = _io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['id', 'filename', 'upload_time', 'duration', 'risk_level', 'assessment', 'incidents', 'critical', 'language', 'models'])
+    for row in rows:
+        writer.writerow([row['id'], row['filename'], row['upload_time'],
+                        row['duration'], row['risk_level'], row['overall_assessment'],
+                        row['total_incidents'], row['critical_incidents'],
+                        row['language'], row['models_used']])
+
+    audit.log('csv_export', details={'count': len(rows), 'filters': {'start_date': start_date, 'end_date': end_date, 'risk_level': risk_level}})
+
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=soundshield_export.csv'}
+    )
+
+
+@app.route('/api/v1/analyses/compare', methods=['GET'])
+def api_compare_analyses():
+    """Compare multiple analyses side by side."""
+    ids_param = request.args.get('ids', '')
+    if not ids_param:
+        return jsonify({'error': 'Provide comma-separated analysis IDs via ?ids=1,2,3'}), 400
+
+    try:
+        ids = [int(x.strip()) for x in ids_param.split(',')]
+    except ValueError:
+        return jsonify({'error': 'IDs must be integers'}), 400
+
+    if len(ids) > 5:
+        return jsonify({'error': 'Maximum 5 analyses for comparison'}), 400
+    if len(ids) < 2:
+        return jsonify({'error': 'Need at least 2 analyses to compare'}), 400
+
+    if not db:
+        return jsonify({'error': 'Database not available'}), 503
+
+    analyses = []
+    for aid in ids:
+        analysis = db.get_analysis(aid)
+        if not analysis:
+            return jsonify({'error': f'Analysis {aid} not found'}), 404
+
+        results = json.loads(analysis['results_json']) if isinstance(analysis['results_json'], str) else analysis['results_json']
+        analyses.append({
+            'id': analysis['id'],
+            'filename': analysis['filename'],
+            'upload_time': analysis['upload_time'],
+            'duration': analysis['duration'],
+            'risk_level': analysis['risk_level'],
+            'total_incidents': analysis['total_incidents'],
+            'critical_incidents': analysis['critical_incidents'],
+            'results': results
+        })
+
+    # Compute comparison summary
+    comparison = {
+        'analyses': analyses,
+        'summary': {
+            'risk_levels': {a['id']: a['risk_level'] for a in analyses},
+            'incident_counts': {a['id']: a['total_incidents'] for a in analyses},
+            'critical_counts': {a['id']: a['critical_incidents'] for a in analyses},
+            'durations': {a['id']: a['duration'] for a in analyses},
+            'highest_risk': max(analyses, key=lambda a: a.get('total_incidents', 0))['id'],
+            'lowest_risk': min(analyses, key=lambda a: a.get('total_incidents', 0))['id'],
+        }
+    }
+
+    return jsonify(comparison)
+
+
+@app.route('/api/v1/digest/daily')
+def api_daily_digest():
+    """Get daily analysis digest."""
+    from digest import DigestGenerator
+    gen = DigestGenerator(db=db)
+    return jsonify(gen.generate_daily_digest())
+
+
+@app.route('/api/v1/digest/weekly')
+def api_weekly_digest():
+    """Get weekly analysis digest."""
+    from digest import DigestGenerator
+    gen = DigestGenerator(db=db)
+    return jsonify(gen.generate_weekly_digest())
+
 
 def create_html_template():
     """Create basic HTML template for the web interface"""
