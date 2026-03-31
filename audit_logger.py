@@ -118,6 +118,21 @@ class AuditLogger:
         finally:
             conn.close()
 
+    def count_entries(self, action_filter: str = None) -> int:
+        """Return total number of audit log entries, optionally filtered by action."""
+        conn = self._get_conn()
+        try:
+            if action_filter:
+                row = conn.execute(
+                    'SELECT COUNT(*) AS cnt FROM audit_log WHERE action = ?',
+                    (action_filter,)
+                ).fetchone()
+            else:
+                row = conn.execute('SELECT COUNT(*) AS cnt FROM audit_log').fetchone()
+            return row['cnt']
+        finally:
+            conn.close()
+
     def get_logs_for_resource(self, resource_type: str,
                               resource_id: str) -> List[Dict]:
         """Get all audit entries for a specific resource."""

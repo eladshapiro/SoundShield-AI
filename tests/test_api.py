@@ -211,6 +211,65 @@ class TestAPIEndpoints(unittest.TestCase):
         data = response.get_json()
         self.assertIn('data', data)
 
+    # --- Pagination Tests ---
+
+    def test_audit_log_pagination(self):
+        """Test audit log supports pagination."""
+        response = self.client.get('/api/v1/audit-log?page=1&per_page=5')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('data', data)
+        self.assertIn('meta', data)
+        self.assertEqual(data['meta']['page'], 1)
+        self.assertEqual(data['meta']['per_page'], 5)
+        self.assertIn('total', data['meta'])
+
+    def test_audit_log_pagination_defaults(self):
+        """Test audit log works without explicit pagination params (backward compat)."""
+        response = self.client.get('/api/v1/audit-log')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('data', data)
+        self.assertIn('meta', data)
+        self.assertEqual(data['meta']['page'], 1)
+        self.assertEqual(data['meta']['per_page'], 50)
+
+    def test_audit_log_per_page_cap(self):
+        """Test audit log caps per_page at 100."""
+        response = self.client.get('/api/v1/audit-log?per_page=500')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['meta']['per_page'], 100)
+
+    def test_notifications_pagination(self):
+        """Test notifications supports pagination."""
+        response = self.client.get('/api/v1/notifications?page=1&per_page=5')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('data', data)
+        self.assertIn('meta', data)
+        self.assertEqual(data['meta']['page'], 1)
+        self.assertEqual(data['meta']['per_page'], 5)
+        self.assertIn('total', data['meta'])
+        self.assertIn('unread_count', data)
+
+    def test_notifications_pagination_defaults(self):
+        """Test notifications works without explicit pagination params (backward compat)."""
+        response = self.client.get('/api/v1/notifications')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('data', data)
+        self.assertIn('meta', data)
+        self.assertEqual(data['meta']['page'], 1)
+        self.assertEqual(data['meta']['per_page'], 50)
+
+    def test_notifications_per_page_cap(self):
+        """Test notifications caps per_page at 100."""
+        response = self.client.get('/api/v1/notifications?per_page=999')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['meta']['per_page'], 100)
+
     # --- Input Validation & SSRF Protection Tests ---
 
     def test_webhook_ssrf_blocked_localhost(self):
@@ -340,6 +399,18 @@ class TestAPIEndpoints(unittest.TestCase):
         if user:
             response = self.client.delete(f'/api/v1/users/{user["id"]}')
             self.assertEqual(response.status_code, 200)
+
+    def test_request_id_in_response_headers(self):
+        """Test that X-Request-ID is present in response headers."""
+        response = self.client.get('/api/v1/health')
+        self.assertIn('X-Request-ID', response.headers)
+        self.assertTrue(len(response.headers['X-Request-ID']) > 0)
+
+    def test_request_id_propagated(self):
+        """Test that incoming X-Request-ID is propagated."""
+        response = self.client.get('/api/v1/health',
+            headers={'X-Request-ID': 'test-req-123'})
+        self.assertEqual(response.headers.get('X-Request-ID'), 'test-req-123')
 
 
 if __name__ == '__main__':

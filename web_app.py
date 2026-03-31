@@ -2,7 +2,7 @@
 Web Application for Kindergarten Recording Analyzer
 """
 
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, Response
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, Response, g
 from flask_cors import CORS
 import os
 import sys
@@ -86,6 +86,25 @@ def rate_limit(limit_string):
     return decorator
 
 
+# Request ID middleware
+import uuid as _uuid
+
+@app.before_request
+def add_request_id():
+    """Generate or propagate a unique request ID for tracing."""
+    # Respect incoming X-Request-ID header (e.g., from load balancer)
+    request_id = request.headers.get('X-Request-ID', '')
+    if not request_id:
+        request_id = _uuid.uuid4().hex[:12]
+    g.request_id = request_id
+    # Set correlation ID for structured logging
+    try:
+        from structured_logging import set_correlation_id
+        set_correlation_id(request_id)
+    except ImportError:
+        pass
+
+
 # Security headers
 @app.after_request
 def add_security_headers(response):
@@ -105,6 +124,8 @@ def add_security_headers(response):
         )
         if not app.debug:
             response.headers['Strict-Transport-Security'] = f'max-age={config.security.hsts_max_age}; includeSubDomains'
+    # Add request ID to response
+    response.headers['X-Request-ID'] = getattr(g, 'request_id', '')
     return response
 
 # Configuration — driven by config.py
@@ -1364,11 +1385,30 @@ def api_stats():
 
 @app.route('/api/v1/audit-log')
 def api_audit_log():
-    """Retrieve audit log entries."""
-    limit = request.args.get('limit', 100, type=int)
-    offset = request.args.get('offset', 0, type=int)
+    """Retrieve audit log entries with pagination."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    per_page = min(per_page, 100)  # Cap at 100
+
+    # Also honour legacy limit/offset params for backward compatibility
+    if 'limit' in request.args or 'offset' in request.args:
+        limit = request.args.get('limit', 100, type=int)
+        offset = request.args.get('offset', 0, type=int)
+    else:
+        limit = per_page
+        offset = (page - 1) * per_page
+
     logs = audit.get_recent_logs(limit=limit, offset=offset)
-    return jsonify({'data': logs, 'count': len(logs)})
+    total = audit.count_entries()
+    return jsonify({
+        'data': logs,
+        'count': len(logs),
+        'meta': {
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+        }
+    })
 
 
 @app.route('/api/v1/cleanup', methods=['POST'])
@@ -1386,17 +1426,33 @@ def api_cleanup():
 
 @app.route('/api/v1/notifications')
 def api_notifications():
-    """Get notifications with optional filters."""
-    limit = request.args.get('limit', 50, type=int)
-    offset = request.args.get('offset', 0, type=int)
+    """Get notifications with optional filters and pagination."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    per_page = min(per_page, 100)  # Cap at 100
     level = request.args.get('level')
     unread = request.args.get('unread', 'false').lower() == 'true'
+
+    # Also honour legacy limit/offset params for backward compatibility
+    if 'limit' in request.args or 'offset' in request.args:
+        limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
+    else:
+        limit = per_page
+        offset = (page - 1) * per_page
+
     items = notifications.get_notifications(limit=limit, offset=offset,
                                             level=level, unread_only=unread)
+    total = notifications.count_notifications(level=level, unread_only=unread)
     return jsonify({
         'data': items,
         'count': len(items),
         'unread_count': notifications.get_unread_count(),
+        'meta': {
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+        }
     })
 
 

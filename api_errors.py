@@ -4,7 +4,7 @@ Standardized API Error Handling for SoundShield-AI
 Provides consistent error response format across all API endpoints.
 """
 
-from flask import jsonify
+from flask import jsonify, g
 from datetime import datetime
 
 
@@ -24,6 +24,7 @@ class APIError(Exception):
                 'code': self.code,
                 'message': self.message,
                 'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'request_id': getattr(g, 'request_id', None),
             }
         }
         if self.details:

@@ -189,6 +189,15 @@ class NotificationManager:
         page = filtered[offset:offset + limit]
         return [self._to_dict(n) for n in page]
 
+    def count_notifications(self, level: str = None, unread_only: bool = False) -> int:
+        """Return total count of notifications matching the given filters."""
+        filtered = self._notifications
+        if level:
+            filtered = [n for n in filtered if n.level == level]
+        if unread_only:
+            filtered = [n for n in filtered if not n.read]
+        return len(filtered)
+
     def mark_read(self, notification_id: str) -> bool:
         """Mark a notification as read."""
         for n in self._notifications:
