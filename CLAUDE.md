@@ -21,7 +21,7 @@ python example_usage.py                   # Generate synthetic audio and run ana
 python benchmark.py                       # Performance benchmark for all detectors
 
 # Tests
-python -m pytest tests/                   # Full test suite (138 tests, unittest-based)
+python -m pytest tests/                   # Full test suite (228 tests, unittest-based)
 python -m pytest tests/test_api.py        # API endpoint smoke tests
 python -m pytest tests/test_integration.py # Full pipeline integration tests
 python run_system_test.py                 # End-to-end test on synthetic audio
@@ -160,6 +160,11 @@ Static files: `static/css/main.css`, `static/js/{app,upload,waveform,charts,moda
 | `tests/test_config.py` | Config system | 15 |
 | `tests/test_integration.py` | Full pipeline + notifications | 12 |
 | `tests/test_api.py` | API endpoints (Flask client) | 39 |
+| `tests/test_metrics.py` | MetricsCollector | 14 |
+| `tests/test_digest.py` | DigestGenerator | 4 |
+| `tests/test_resilience.py` | Retry, CircuitBreaker, MemoryGuard | 15 |
+| `tests/test_e2e_web.py` | E2E authenticated web flow | 37 |
+| `tests/test_security.py` | Security headers, JWT, RBAC, XSS, SQLi | ~20 |
 
 ## Commit Convention
 

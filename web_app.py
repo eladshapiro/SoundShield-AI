@@ -771,6 +771,38 @@ def health_check():
     })
 
 
+@app.route('/api/v1/version')
+def api_version():
+    """Get application version and build info."""
+    import subprocess
+
+    # Try to get git commit hash
+    try:
+        commit = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            stderr=subprocess.DEVNULL, timeout=5
+        ).decode().strip()
+    except Exception:
+        commit = 'unknown'
+
+    # Try to get commit date
+    try:
+        commit_date = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%ci'],
+            stderr=subprocess.DEVNULL, timeout=5
+        ).decode().strip()
+    except Exception:
+        commit_date = 'unknown'
+
+    return jsonify({
+        'version': config.version,
+        'commit': commit,
+        'commit_date': commit_date,
+        'python_version': platform.python_version(),
+        'platform': platform.platform(),
+    })
+
+
 @app.route('/progress-stream/<filename>')
 def progress_stream(filename):
     """Server-Sent Events endpoint for real-time progress updates."""
