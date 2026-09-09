@@ -1016,14 +1016,57 @@ class InappropriateLanguageDetector:
         
         return 0.0
     
-    def analyze_with_whisper(self, audio_file: str, language: str = 'en') -> Dict:
+    def analyze_transcription(self, transcription: str, segments: List[Dict],
+                              language: str = 'en') -> Dict:
+        """Run the word-list detector on an existing transcript.
+
+        ``segments`` is a list of ``{'start', 'end', 'text'}`` dicts (Whisper
+        schema) used to attach timestamps to matches.
+        """
+        detected_words = self.detect_inappropriate_language(transcription, segments, language=language)
+        by_severity = {'critical': [], 'high': [], 'medium': [], 'low': []}
+        for word_obj in detected_words:
+            by_severity.setdefault(word_obj.severity, []).append({
+                'word': word_obj.word,
+                'timestamp': word_obj.timestamp,
+                'language': word_obj.language,
+                'context': word_obj.context
+            })
+        return {
+            'transcription': transcription,
+            'segments': segments,
+            'detected_inappropriate_words': len(detected_words),
+            'words_by_severity': by_severity,
+            'total_words': len(detected_words),
+            'has_inappropriate_language': len(detected_words) > 0,
+            'detected_words': [
+                {
+                    'word': w.word,
+                    'timestamp': w.timestamp,
+                    'severity': w.severity,
+                    'language': w.language,
+                    'context': w.context
+                }
+                for w in detected_words
+            ]
+        }
+
+    def analyze_with_whisper(self, audio_file: str, language: str = 'en',
+                             transcription: Optional[Dict] = None) -> Dict:
         """
         Analyze audio file using Whisper for transcription and inappropriate language detection
         
         Args:
             audio_file: Path to audio file
             language: Language code ('en' for English, 'he' for Hebrew)
+            transcription: Optional precomputed ``{'text': str, 'segments': [...]}``
+                (e.g. from ``AdvancedAnalyzer.transcribe``); when given, Whisper is
+                not loaded here and the transcript is analysed directly.
         """
+        if transcription is not None and transcription.get('text') is not None:
+            return self.analyze_transcription(transcription['text'],
+                                              transcription.get('segments', []) or [],
+                                              language=language)
         try:
             import whisper
             import os

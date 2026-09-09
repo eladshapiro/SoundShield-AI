@@ -117,6 +117,11 @@ class ViolenceDetectorConfig:
     physical_energy_spike: float = _env_float('VIOLENCE_PHYSICAL_ENERGY_SPIKE', 0.4)
     physical_hf_content: float = _env_float('VIOLENCE_PHYSICAL_HF_CONTENT', 0.8)
     physical_rapid_changes: float = _env_float('VIOLENCE_PHYSICAL_RAPID_CHANGES', 0.6)
+    # ML path: aggressive adult speech := arousal >= A and dominance >= D and valence <= V
+    # (dimensional emotion model, speech-gated by the tagger); tuned on the dev split
+    aggressive_arousal: float = _env_float('VIOLENCE_AGGRESSIVE_AROUSAL', 0.5)
+    aggressive_dominance: float = _env_float('VIOLENCE_AGGRESSIVE_DOMINANCE', 0.75)
+    aggressive_valence_max: float = _env_float('VIOLENCE_AGGRESSIVE_VALENCE_MAX', 0.45)
     # Context analysis
     before_violence_window: float = _env_float('VIOLENCE_BEFORE_WINDOW', 5.0)
     after_violence_window: float = _env_float('VIOLENCE_AFTER_WINDOW', 5.0)
@@ -186,9 +191,58 @@ class LanguageDetectorConfig:
 @dataclass
 class AdvancedAnalyzerConfig:
     use_advanced: bool = _env_bool('USE_ADVANCED_MODELS', True)
-    whisper_model: str = _env_str('WHISPER_MODEL', 'base')
+    whisper_model: str = _env_str('WHISPER_MODEL', 'base')          # legacy default / fallback
+    # Per-language Whisper models (faster-whisper / CTranslate2 names or HF repos).
+    # Hebrew: ivrit.ai turbo (WER 21% vs 66% for `base` on FLEURS he_il, see evaluation/results).
+    whisper_model_en: str = _env_str('WHISPER_MODEL_EN', 'large-v3-turbo')
+    whisper_model_he: str = _env_str('WHISPER_MODEL_HE', 'ivrit-ai/whisper-large-v3-turbo-ct2')
+    whisper_device: str = _env_str('WHISPER_DEVICE', 'auto')        # auto | cuda | cpu
+    whisper_compute_type: str = _env_str('WHISPER_COMPUTE_TYPE', 'auto')  # auto | float16 | int8 | ...
+    whisper_beam_size: int = _env_int('WHISPER_BEAM_SIZE', 5)
     hubert_model: str = _env_str('HUBERT_MODEL', 'superb/hubert-large-superb-er')
     chunk_duration: float = _env_float('ADVANCED_CHUNK_DURATION', 7.0)
+    # Dimensional emotion model (arousal / dominance / valence), language-agnostic
+    dim_emotion_model: str = _env_str('DIM_EMOTION_MODEL',
+                                      'audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim')
+    use_dimensional_emotion: bool = _env_bool('USE_DIMENSIONAL_EMOTION', True)
+    emotion_window_seconds: float = _env_float('EMOTION_WINDOW_SECONDS', 5.0)
+    emotion_hop_seconds: float = _env_float('EMOTION_HOP_SECONDS', 2.5)
+    # Operating points for the concerning-emotion (anger) rule, tuned on the dev split of the
+    # real-audio evaluation suite (evaluation/fusion.py):
+    #   anger := arousal >= A and dominance >= D and (valence <= V or P_hubert(anger) >= T)
+    anger_prob_threshold: float = _env_float('EMOTION_ANGER_PROB_THRESHOLD', 0.7)
+    arousal_threshold: float = _env_float('EMOTION_AROUSAL_THRESHOLD', 0.5)
+    dominance_threshold: float = _env_float('EMOTION_DOMINANCE_THRESHOLD', 0.6)
+    valence_max: float = _env_float('EMOTION_VALENCE_MAX', 0.25)
+    # Persistence: a concerning-emotion segment must span at least this many consecutive
+    # windows (1 = flag single 5 s windows; 2 = at least ~7.5 s of angry speech)
+    emotion_min_windows: int = _env_int('EMOTION_MIN_WINDOWS', 1)
+
+    def whisper_model_for(self, language: str) -> str:
+        if language == 'he':
+            return self.whisper_model_he or self.whisper_model
+        if language == 'en':
+            return self.whisper_model_en or self.whisper_model
+        return self.whisper_model
+
+
+# ---------------------------------------------------------------------------
+# AudioSet event tagger (AST) — ML-first cry / scream / speech signal
+# ---------------------------------------------------------------------------
+@dataclass
+class TaggerConfig:
+    enabled: bool = _env_bool('TAGGER_ENABLED', True)
+    model: str = _env_str('TAGGER_MODEL', 'MIT/ast-finetuned-audioset-10-10-0.4593')
+    device: str = _env_str('TAGGER_DEVICE', 'auto')          # auto | cuda | cpu
+    window_seconds: float = _env_float('TAGGER_WINDOW_SECONDS', 3.0)
+    hop_seconds: float = _env_float('TAGGER_HOP_SECONDS', 1.0)
+    batch_size: int = _env_int('TAGGER_BATCH_SIZE', 32)
+    # Operating points (calibrated on the real-audio evaluation suite, see evaluation/)
+    cry_threshold: float = _env_float('TAGGER_CRY_THRESHOLD', 0.08)
+    scream_threshold: float = _env_float('TAGGER_SCREAM_THRESHOLD', 0.01)
+    speech_threshold: float = _env_float('TAGGER_SPEECH_THRESHOLD', 0.60)
+    speech_over_cry_margin: float = _env_float('TAGGER_SPEECH_OVER_CRY_MARGIN', 0.20)
+    impact_threshold: float = _env_float('TAGGER_IMPACT_THRESHOLD', 0.30)
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +319,7 @@ class SoundShieldConfig:
     neglect: NeglectDetectorConfig = field(default_factory=NeglectDetectorConfig)
     language: LanguageDetectorConfig = field(default_factory=LanguageDetectorConfig)
     advanced: AdvancedAnalyzerConfig = field(default_factory=AdvancedAnalyzerConfig)
+    tagger: TaggerConfig = field(default_factory=TaggerConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     web: WebAppConfig = field(default_factory=WebAppConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
@@ -272,7 +327,7 @@ class SoundShieldConfig:
     logging_config: LoggingConfig = field(default_factory=LoggingConfig)
 
     # Application metadata
-    version: str = '2.5.0'
+    version: str = '3.0.0'
     app_name: str = 'SoundShield-AI'
 
 

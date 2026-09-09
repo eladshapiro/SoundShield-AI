@@ -72,6 +72,14 @@ except ImportError:
     DIARIZER_AVAILABLE = False
     logger.warning("Speaker diarizer not available (optional)")
 
+# Import AudioSet event tagger (ML-first cry / scream / speech signal)
+try:
+    from audio_tagger import get_tagger
+    TAGGER_AVAILABLE = True
+except ImportError:
+    TAGGER_AVAILABLE = False
+    logger.warning("Audio tagger not available (optional)")
+
 # Constants
 SUPPORTED_LANGUAGES = ['en', 'he']
 SUPPORTED_FORMATS = ['.wav', '.mp3', '.m4a', '.flac', '.aac', '.ogg']
@@ -162,6 +170,19 @@ class KindergartenRecordingAnalyzer:
                     )
             except Exception as e:
                 logger.warning(f"Error loading advanced models: {e}")
+
+        # AudioSet event tagger — primary signal for cry / scream / speech
+        self.tagger = None
+        if TAGGER_AVAILABLE and use_advanced:
+            try:
+                self.tagger = get_tagger()
+                if self.tagger is not None and self.tagger.load():
+                    logger.info(f"Audio tagger loaded ({self.tagger.model_name} on {self.tagger.device})")
+                else:
+                    self.tagger = None
+            except Exception as e:
+                logger.warning(f"Error loading audio tagger: {e}")
+                self.tagger = None
 
         # Initialize speaker diarizer
         self.speaker_diarizer = None
@@ -275,7 +296,23 @@ class KindergartenRecordingAnalyzer:
                     f"(maximum: {MAX_AUDIO_LENGTH_SECONDS}s)"
                 )
 
-            # Step 2: Emotion detection (HuBERT primary, heuristic fallback)
+            # Load waveform once (heuristic sample rate) and build ML timelines
+            audio, sr = self.audio_analyzer.load_audio(file_path)
+            tag_timeline = None
+            if self.tagger is not None:
+                try:
+                    tag_timeline = self.tagger.tag(audio, sr)
+                    logger.info(f"Audio tagger: {len(tag_timeline.starts)} windows")
+                except Exception as e:
+                    logger.warning(f"Audio tagger failed, using heuristics: {e}")
+            emotion_timeline = None
+            if self.advanced_analyzer and self.advanced_analyzer.emotion_analyzer is not None:
+                try:
+                    emotion_timeline = self.advanced_analyzer.emotion_timeline(audio=audio, sr=sr)
+                except Exception as e:
+                    logger.warning(f"Emotion models failed, using heuristics: {e}")
+
+            # Step 2: Emotion detection (neural models primary, heuristic fallback)
             update_progress("Emotion detection")
             heuristic_emotions = self.emotion_detector.analyze_segment_emotions(
                 audio_analysis['segments'],
@@ -285,57 +322,50 @@ class KindergartenRecordingAnalyzer:
                 heuristic_emotions
             )
 
-            # Use HuBERT as PRIMARY when available, merge with heuristics
-            advanced_emotions = []
-            hubert_used = False
-            if (self.advanced_analyzer and
-                    hasattr(self.advanced_analyzer, 'hubert_loaded') and
-                    self.advanced_analyzer.hubert_loaded):
+            ml_emotions_used = False
+            if emotion_timeline is not None:
                 try:
-                    advanced_emotions = self.advanced_analyzer.detect_concerning_emotions_advanced(
-                        file_path
+                    concerning_emotions = self.advanced_analyzer.concerning_emotions_from_timeline(
+                        emotion_timeline, tag_timeline
                     )
-                    hubert_used = True
-                    logger.info(f"HuBERT detected {len(advanced_emotions)} concerning segments")
+                    ml_emotions_used = True
+                    logger.info(f"Neural emotion models flagged {len(concerning_emotions)} segments")
                 except Exception as e:
-                    logger.warning(f"HuBERT emotion detection failed, using heuristics: {e}")
-
-            if hubert_used and advanced_emotions:
-                concerning_emotions = self.emotion_detector.merge_with_advanced_results(
-                    heuristic_concerning, advanced_emotions
-                )
-            else:
+                    logger.warning(f"Neural emotion detection failed, using heuristics: {e}")
+            if not ml_emotions_used:
                 concerning_emotions = heuristic_concerning
                 for e in concerning_emotions:
                     e['ml_backed'] = False
+            hubert_used = ml_emotions_used
 
             emotion_results = heuristic_emotions
 
             # Step 3: Cry detection
             update_progress("Baby cry detection")
-            audio, sr = self.audio_analyzer.load_audio(file_path)
-            cry_segments = self.cry_detector.detect_cry_segments(audio, sr)
+            cry_segments = self.cry_detector.detect_cry_segments(audio, sr, timeline=tag_timeline)
             cry_with_responses = self.cry_detector.detect_response_to_cry(
-                audio, sr, cry_segments
+                audio, sr, cry_segments, timeline=tag_timeline
             )
 
             # Step 4: Violence detection
             update_progress("Violence detection")
-            violence_segments = self.violence_detector.detect_violence_segments(audio, sr)
+            violence_segments = self.violence_detector.detect_violence_segments(
+                audio, sr, timeline=tag_timeline, emotion_timeline=emotion_timeline
+            )
 
             # Step 5: Neglect detection
             update_progress("Neglect detection")
             neglect_analysis = self.neglect_detector.detect_neglect_patterns(
-                audio, sr, cry_segments, violence_segments
+                audio, sr, cry_segments, violence_segments, timeline=tag_timeline
             )
 
-            # Step 6: Advanced analysis with ML models (Whisper + comprehensive)
+            # Step 6: Advanced analysis with ML models (Whisper + emotion summary)
             advanced_analysis = {}
             if self.advanced_analyzer and self.advanced_analyzer.models_loaded:
                 update_progress("Advanced ML analysis")
                 try:
                     advanced_analysis = self.advanced_analyzer.comprehensive_analysis(
-                        file_path, language=language
+                        file_path, language=language, emotion_timeline=emotion_timeline
                     )
                     logger.info("Advanced analysis completed successfully")
                 except Exception as e:
@@ -352,13 +382,19 @@ class KindergartenRecordingAnalyzer:
                 except Exception as e:
                     logger.warning(f"Speaker diarization failed: {e}")
 
-            # Step 7: Inappropriate language detection
+            # Step 7: Inappropriate language detection (re-uses the step-6 transcript)
             inappropriate_language = {}
             if self.language_detector:
                 update_progress("Inappropriate language detection")
                 try:
+                    shared_transcription = None
+                    if self.advanced_analyzer and self.advanced_analyzer.whisper_loaded:
+                        try:
+                            shared_transcription = self.advanced_analyzer.transcribe(file_path, language)
+                        except Exception as e:
+                            logger.warning(f"Shared transcription unavailable: {e}")
                     inappropriate_language = self.language_detector.analyze_with_whisper(
-                        file_path, language=language
+                        file_path, language=language, transcription=shared_transcription
                     )
                     detected_count = inappropriate_language.get('detected_inappropriate_words', 0)
                     if detected_count > 0:
@@ -370,8 +406,12 @@ class KindergartenRecordingAnalyzer:
 
             # Track which models were used
             models_used = []
+            if tag_timeline is not None:
+                models_used.append('ast-tagger')
             if hubert_used:
                 models_used.append('hubert')
+            if emotion_timeline is not None and emotion_timeline.has_dimensional:
+                models_used.append('wav2vec2-dim')
             if self.advanced_analyzer and self.advanced_analyzer.whisper_loaded:
                 models_used.append('whisper')
             if self.speaker_diarizer:
@@ -392,6 +432,10 @@ class KindergartenRecordingAnalyzer:
                 'diarization': diarization_results,
                 'inappropriate_language': inappropriate_language,
                 'models_used': models_used,
+                'timelines': {
+                    'tags': tag_timeline.to_dict() if tag_timeline is not None else None,
+                    'emotion': emotion_timeline.to_dict() if emotion_timeline is not None else None,
+                },
                 'analysis_timestamp': time.time(),
                 'language': language
             }

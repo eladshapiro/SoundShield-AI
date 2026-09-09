@@ -41,7 +41,7 @@ class CryDetector:
             'response_pitch_threshold': cfg.response_pitch_threshold
         }
     
-    def detect_cry_segments(self, audio: np.ndarray, sr: int) -> List[Dict]:
+    def detect_cry_segments(self, audio: np.ndarray, sr: int, timeline=None) -> List[Dict]:
         """
         Detect baby cry segments in audio
         זיהוי קטעי בכי תינוקות באודיו
@@ -49,10 +49,17 @@ class CryDetector:
         Args:
             audio: Audio data
             sr: Sample rate
+            timeline: Optional ``audio_tagger.TagTimeline`` for the same audio.
+                When given, the AudioSet tagger is the primary detector
+                (segments carry ``ml_backed=True``) and the spectral
+                heuristics below are only the fallback.
             
         Returns:
             List of detected cry segments with metadata
         """
+        if timeline is not None:
+            return self._detect_cry_segments_ml(audio, sr, timeline)
+
         cry_segments = []
         
         # Segment audio for analysis
@@ -89,6 +96,57 @@ class CryDetector:
         
         return merged_segments
     
+    def _detect_cry_segments_ml(self, audio: np.ndarray, sr: int, timeline) -> List[Dict]:
+        """Cry segments from AudioSet tagger probabilities (ML-first path)."""
+        threshold = config.tagger.cry_threshold
+        segments = []
+        for start, end, peak in timeline.segments('cry', threshold, merge_gap=1.0):
+            seg = audio[int(start * sr):int(end * sr)]
+            if len(seg) == 0:
+                continue
+            rms = librosa.feature.rms(y=seg)[0]
+            features = {
+                'mean_energy': float(np.mean(rms)),
+                'max_energy': float(np.max(rms)),
+                'cry_score': float(peak),
+                'infant_cry_score': float(timeline.score('infant_cry', start, end)),
+                'speech_score': float(timeline.score('speech', start, end)),
+                'top_labels': timeline.top_labels(start, end, 3),
+            }
+            segments.append({
+                'start_time': float(start),
+                'end_time': float(end),
+                'duration': float(end - start),
+                'features': features,
+                'confidence': float(peak),
+                'intensity': self._calculate_cry_intensity(features),
+                'ml_backed': True,
+            })
+        return segments
+
+    def _analyze_response_window_ml(self, timeline, t0: float, t1: float) -> Dict:
+        """Staff response inside [t0, t1) from the tagger's speech probability."""
+        threshold = config.tagger.speech_threshold
+        best = None
+        for s, e, peak in timeline.segments('speech_dominant', threshold):
+            if e <= t0 or s >= t1:
+                continue
+            s2, e2 = max(s, t0), min(e, t1)
+            if best is None or peak > best[2]:
+                best = (s2, e2, peak)
+        if best is None:
+            return {'has_response': False, 'response_start': 0, 'response_end': 0,
+                    'response_quality': 'none', 'confidence': 0.0, 'ml_backed': True}
+        s2, e2, peak = best
+        if peak < 0.5:
+            quality = 'poor'
+        elif peak < 0.7 or (e2 - s2) < self.response_features['min_response_duration']:
+            quality = 'adequate'
+        else:
+            quality = 'good'
+        return {'has_response': True, 'response_start': s2 - t0, 'response_end': e2 - t0,
+                'response_quality': quality, 'confidence': float(peak), 'ml_backed': True}
+
     def _calculate_cry_features(self, audio: np.ndarray, sr: int) -> Dict:
         """
         Calculate features specific to baby cry detection
@@ -333,7 +391,8 @@ class CryDetector:
         
         return merged
     
-    def detect_response_to_cry(self, audio: np.ndarray, sr: int, cry_segments: List[Dict]) -> List[Dict]:
+    def detect_response_to_cry(self, audio: np.ndarray, sr: int, cry_segments: List[Dict],
+                               timeline=None) -> List[Dict]:
         """
         Detect staff responses to baby cries
         זיהוי תגובות הצוות לבכי תינוקות
@@ -342,6 +401,8 @@ class CryDetector:
             audio: Full audio data
             sr: Sample rate
             cry_segments: List of detected cry segments
+            timeline: Optional ``TagTimeline``; when given, a response is adult
+                speech detected by the tagger instead of the spectral heuristic.
             
         Returns:
             List of cry segments with response analysis
@@ -359,7 +420,10 @@ class CryDetector:
             response_audio = audio[start_sample:end_sample]
             
             # Analyze response
-            response_analysis = self._analyze_response_segment(response_audio, sr)
+            if timeline is not None:
+                response_analysis = self._analyze_response_window_ml(timeline, response_start, response_end)
+            else:
+                response_analysis = self._analyze_response_segment(response_audio, sr)
             
             cry_with_response = cry.copy()
             cry_with_response['response_analysis'] = response_analysis
@@ -543,7 +607,7 @@ class CryDetector:
     # ---- Sprint 5 enhancements ----
 
     def measure_response_time(self, audio: np.ndarray, sr: int,
-                              cry_segments: List[Dict]) -> List[Dict]:
+                              cry_segments: List[Dict], timeline=None) -> List[Dict]:
         """Quantified staff response time metric.
 
         For each cry segment, measures exact seconds from cry onset to first
@@ -553,6 +617,7 @@ class CryDetector:
         response_rating fields.
         """
         enriched = []
+        speech_threshold = config.tagger.speech_threshold
         for cry in cry_segments:
             entry = cry.copy()
             # Search from cry start (not end) for more accurate timing
@@ -566,6 +631,12 @@ class CryDetector:
             t = search_start
             while t < search_end:
                 t_end = min(t + 1.0, search_end)
+                if timeline is not None:
+                    if timeline.score('speech_dominant', t, t_end) >= speech_threshold:
+                        response_time = t - cry['start_time']
+                        break
+                    t += step
+                    continue
                 start_sample = int(t * sr)
                 end_sample = int(t_end * sr)
                 if end_sample <= start_sample:

@@ -1,0 +1,476 @@
+{
+  "tag": "baseline",
+  "generated": "2026-09-09 16:48",
+  "config_hash": "4407b47de0",
+  "tasks": {
+    "cry": {
+      "heuristic": {
+        "n_pos": 497,
+        "n_neg": 2974,
+        "tp": 451,
+        "fp": 2261,
+        "fn": 46,
+        "tn": 713,
+        "precision": 0.16629793510324484,
+        "recall": 0.9074446680080482,
+        "f1": 0.2810844499844188,
+        "fpr": 0.7602555480833894,
+        "accuracy": 0.3353500432152118,
+        "roc_auc": 0.7283201563111015,
+        "avg_precision": 0.25118651067488584,
+        "errors": 0,
+        "groups": {
+          "cremad/neutral": {
+            "n": 326,
+            "label": 0,
+            "positive_rate": 0.6288343558282209,
+            "fpr": 0.6288343558282209
+          },
+          "donateacry/infant_cry": {
+            "n": 457,
+            "label": 1,
+            "positive_rate": 0.899343544857768,
+            "recall": 0.899343544857768
+          },
+          "esc50/animals": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.9625,
+            "fpr": 0.9625
+          },
+          "esc50/domestic": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.745,
+            "fpr": 0.745
+          },
+          "esc50/human_nonspeech": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.8075,
+            "fpr": 0.8075
+          },
+          "esc50/natural": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.785,
+            "fpr": 0.785
+          },
+          "esc50/urban": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.97,
+            "fpr": 0.97
+          },
+          "librispeech/read_speech": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.955,
+            "fpr": 0.955
+          },
+          "ravdess/calm": {
+            "n": 192,
+            "label": 0,
+            "positive_rate": 0.015625,
+            "fpr": 0.015625
+          },
+          "ravdess/neutral": {
+            "n": 96,
+            "label": 0,
+            "positive_rate": 0.03125,
+            "fpr": 0.03125
+          }
+        },
+        "best_threshold": {
+          "threshold": 0.3672017455101013,
+          "precision": 0.30802047781569963,
+          "recall": 0.7263581488933601,
+          "f1": 0.43259436788496103,
+          "fpr": 0.2726967047747142
+        }
+      }
+    },
+    "violence": {
+      "heuristic": {
+        "n_pos": 371,
+        "n_neg": 3534,
+        "tp": 49,
+        "fp": 795,
+        "fn": 322,
+        "tn": 2739,
+        "precision": 0.058056872037914695,
+        "recall": 0.1320754716981132,
+        "f1": 0.08065843621399178,
+        "fpr": 0.22495755517826826,
+        "accuracy": 0.7139564660691421,
+        "roc_auc": 0.44682079514062084,
+        "avg_precision": 0.0873911602101091,
+        "errors": 0,
+        "groups": {
+          "cremad/happy": {
+            "n": 381,
+            "label": 0,
+            "positive_rate": 0.05511811023622047,
+            "fpr": 0.05511811023622047
+          },
+          "cremad/neutral": {
+            "n": 326,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "esc50/animals": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.4725,
+            "fpr": 0.4725
+          },
+          "esc50/domestic": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.2725,
+            "fpr": 0.2725
+          },
+          "esc50/human_nonspeech": {
+            "n": 360,
+            "label": 0,
+            "positive_rate": 0.21666666666666667,
+            "fpr": 0.21666666666666667
+          },
+          "esc50/natural": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.3075,
+            "fpr": 0.3075
+          },
+          "esc50/urban": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.61,
+            "fpr": 0.61
+          },
+          "librispeech/read_speech": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.075,
+            "fpr": 0.075
+          },
+          "ravdess/angry": {
+            "n": 96,
+            "label": 1,
+            "positive_rate": 0.3020833333333333,
+            "recall": 0.3020833333333333
+          },
+          "ravdess/calm": {
+            "n": 96,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "ravdess/happy": {
+            "n": 96,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "ravdess/neutral": {
+            "n": 96,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "vivae/achievement": {
+            "n": 83,
+            "label": 0,
+            "positive_rate": 0.012048192771084338,
+            "fpr": 0.012048192771084338
+          },
+          "vivae/anger": {
+            "n": 88,
+            "label": 1,
+            "positive_rate": 0.011363636363636364,
+            "recall": 0.011363636363636364
+          },
+          "vivae/fear": {
+            "n": 91,
+            "label": 1,
+            "positive_rate": 0.12087912087912088,
+            "recall": 0.12087912087912088
+          },
+          "vivae/pain": {
+            "n": 96,
+            "label": 1,
+            "positive_rate": 0.08333333333333333,
+            "recall": 0.08333333333333333
+          },
+          "vivae/pleasure": {
+            "n": 96,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          }
+        },
+        "best_threshold": {
+          "threshold": 0.0,
+          "precision": 0.09500640204865557,
+          "recall": 1.0,
+          "f1": 0.17352666043030868,
+          "fpr": 1.0
+        }
+      }
+    },
+    "anger": {
+      "heuristic": {
+        "n_pos": 573,
+        "n_neg": 1587,
+        "tp": 46,
+        "fp": 32,
+        "fn": 527,
+        "tn": 1555,
+        "precision": 0.5897435897435898,
+        "recall": 0.08027923211169284,
+        "f1": 0.141321044546851,
+        "fpr": 0.020163831127914304,
+        "accuracy": 0.7412037037037037,
+        "roc_auc": 0.5300577004918892,
+        "avg_precision": 0.2913256440088901,
+        "errors": 0,
+        "groups": {
+          "cremad/anger": {
+            "n": 381,
+            "label": 1,
+            "positive_rate": 0.11548556430446194,
+            "recall": 0.11548556430446194
+          },
+          "cremad/happy": {
+            "n": 381,
+            "label": 0,
+            "positive_rate": 0.010498687664041995,
+            "fpr": 0.010498687664041995
+          },
+          "cremad/neutral": {
+            "n": 326,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "librispeech/read_speech": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.07,
+            "fpr": 0.07
+          },
+          "ravdess/angry": {
+            "n": 192,
+            "label": 1,
+            "positive_rate": 0.010416666666666666,
+            "recall": 0.010416666666666666
+          },
+          "ravdess/calm": {
+            "n": 192,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "ravdess/happy": {
+            "n": 192,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "ravdess/neutral": {
+            "n": 96,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          }
+        },
+        "best_threshold": {
+          "threshold": 0.0,
+          "precision": 0.2652777777777778,
+          "recall": 1.0,
+          "f1": 0.4193194291986828,
+          "fpr": 1.0
+        }
+      },
+      "hubert": {
+        "n_pos": 573,
+        "n_neg": 1587,
+        "tp": 502,
+        "fp": 474,
+        "fn": 71,
+        "tn": 1113,
+        "precision": 0.514344262295082,
+        "recall": 0.8760907504363001,
+        "f1": 0.6481601032924467,
+        "fpr": 0.29867674858223064,
+        "accuracy": 0.7476851851851852,
+        "roc_auc": 0.8569402793860678,
+        "avg_precision": 0.7217004994652252,
+        "errors": 0,
+        "groups": {
+          "cremad/anger": {
+            "n": 381,
+            "label": 1,
+            "positive_rate": 0.8188976377952756,
+            "recall": 0.8188976377952756
+          },
+          "cremad/happy": {
+            "n": 381,
+            "label": 0,
+            "positive_rate": 0.14173228346456693,
+            "fpr": 0.14173228346456693
+          },
+          "cremad/neutral": {
+            "n": 326,
+            "label": 0,
+            "positive_rate": 0.015337423312883436,
+            "fpr": 0.015337423312883436
+          },
+          "librispeech/read_speech": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.175,
+            "fpr": 0.175
+          },
+          "ravdess/angry": {
+            "n": 192,
+            "label": 1,
+            "positive_rate": 0.9895833333333334,
+            "recall": 0.9895833333333334
+          },
+          "ravdess/calm": {
+            "n": 192,
+            "label": 0,
+            "positive_rate": 0.5572916666666666,
+            "fpr": 0.5572916666666666
+          },
+          "ravdess/happy": {
+            "n": 192,
+            "label": 0,
+            "positive_rate": 0.8072916666666666,
+            "fpr": 0.8072916666666666
+          },
+          "ravdess/neutral": {
+            "n": 96,
+            "label": 0,
+            "positive_rate": 0.8645833333333334,
+            "fpr": 0.8645833333333334
+          }
+        },
+        "best_threshold": {
+          "threshold": 0.8681216835975647,
+          "precision": 0.6317365269461078,
+          "recall": 0.7364746945898778,
+          "f1": 0.6800966962127317,
+          "fpr": 0.15500945179584122
+        }
+      }
+    },
+    "speech": {
+      "heuristic": {
+        "n_pos": 2161,
+        "n_neg": 2057,
+        "tp": 0,
+        "fp": 0,
+        "fn": 2161,
+        "tn": 2057,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "fpr": 0.0,
+        "accuracy": 0.4876718824087245,
+        "roc_auc": 0.5,
+        "avg_precision": 0.5123281175912755,
+        "errors": 0,
+        "groups": {
+          "cremad/happy": {
+            "n": 381,
+            "label": 1,
+            "positive_rate": 0.0,
+            "recall": 0.0
+          },
+          "cremad/neutral": {
+            "n": 326,
+            "label": 1,
+            "positive_rate": 0.0,
+            "recall": 0.0
+          },
+          "cremad/sad": {
+            "n": 382,
+            "label": 1,
+            "positive_rate": 0.0,
+            "recall": 0.0
+          },
+          "donateacry/infant_cry": {
+            "n": 457,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "esc50/animals": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "esc50/domestic": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "esc50/natural": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "esc50/urban": {
+            "n": 400,
+            "label": 0,
+            "positive_rate": 0.0,
+            "fpr": 0.0
+          },
+          "librispeech/read_speech": {
+            "n": 400,
+            "label": 1,
+            "positive_rate": 0.0,
+            "recall": 0.0
+          },
+          "ravdess/calm": {
+            "n": 192,
+            "label": 1,
+            "positive_rate": 0.0,
+            "recall": 0.0
+          },
+          "ravdess/happy": {
+            "n": 192,
+            "label": 1,
+            "positive_rate": 0.0,
+            "recall": 0.0
+          },
+          "ravdess/neutral": {
+            "n": 96,
+            "label": 1,
+            "positive_rate": 0.0,
+            "recall": 0.0
+          },
+          "ravdess/sad": {
+            "n": 192,
+            "label": 1,
+            "positive_rate": 0.0,
+            "recall": 0.0
+          }
+        },
+        "best_threshold": {
+          "threshold": 0.0,
+          "precision": 0.5123281175912755,
+          "recall": 1.0,
+          "f1": 0.6775356638971626,
+          "fpr": 1.0
+        }
+      }
+    }
+  }
+}

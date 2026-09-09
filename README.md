@@ -12,6 +12,44 @@ Advanced system for analyzing kindergarten audio recordings to detect inappropri
 - **Modern GUI** - User-friendly interface with language selection
 - **Web Interface** - Web-based interface for file upload and results viewing
 
+## Accuracy on real audio (v3.0)
+
+v3.0 replaced the hand-tuned spectral heuristics with pretrained audio models as
+the primary detectors and added a real-audio evaluation suite (`evaluation/`,
+~7,000 labelled public clips: ESC-50, Donate-a-Cry, RAVDESS, CREMA-D, VIVAE,
+LibriSpeech, FLEURS).  Thresholds were tuned on a dev split; the numbers below
+are on the held-out test split, comparing the v2.5 heuristics with the v3.0
+production rules.
+
+| task | v2.5 heuristics (P / R / F1) | v3.0 models (P / R / F1) | false-positive rate v2.5 → v3.0 |
+|---|---|---|---|
+| infant cry present | 0.19 / 0.92 / 0.31 | **0.97 / 0.88 / 0.92** | 76% → 0.5% |
+| vocal aggression (screams, strong anger) | 0.08 / 0.17 / 0.11 | **0.74 / 0.79 / 0.77** | 20% → 2.8% |
+| adult speech present (staff-response signal) | 0.00 / 0.00 / 0.00 | **0.97 / 0.99 / 0.98** | 0% → 4.4% |
+| angry adult speech | 0.80 / 0.09 / 0.15 | **0.63 / 0.66 / 0.64** | 0.7% → 13% |
+
+| transcription | Whisper `base` (v2.5) | v3.0 model |
+|---|---|---|
+| Hebrew (FLEURS he_il, WER) | 66.1% | **21.4%** (`ivrit-ai/whisper-large-v3-turbo-ct2`) |
+| English (LibriSpeech dev-clean, WER) | 5.8% | **4.4%** (`large-v3-turbo`) |
+
+Anger is the hardest task: acted, exuberant "happy" speech (RAVDESS strong
+intensity) still triggers the arousal/dominance rule about 60% of the time,
+so `aggression` flags from the dimensional model alone are reported one severity
+level below `anger` flags that both emotion models agree on.  On 20-minute
+montages of held-out clips the full pipeline caught 15/15 inserted cries and
+11/17 screams at ~17× realtime on an RTX 4070 Ti; see
+`evaluation/results/` and `evaluation/README.md` for the full breakdown and
+the false-alarm-per-hour figures.
+
+Models (downloaded from Hugging Face on first use): `MIT/ast-finetuned-audioset-10-10-0.4593`
+(event tagger), `audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim` (arousal /
+dominance / valence), `superb/hubert-large-superb-er` (categorical emotion),
+faster-whisper `large-v3-turbo` / `ivrit-ai/whisper-large-v3-turbo-ct2`.
+Everything runs on CPU if no GPU is present (set `WHISPER_MODEL_EN=base` and
+`TAGGER_HOP_SECONDS=3` there for speed); the heuristics remain as the fallback
+when a model cannot be loaded.
+
 ## Language Support
 
 The application supports two languages:

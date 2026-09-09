@@ -22,6 +22,7 @@ class NeglectDetector:
         אתחול מזהה הזנחה
         """
         cfg = config.neglect
+        self._timeline = None   # TagTimeline for the current call (ML path)
         # Neglect detection parameters
         # פרמטרים לזיהוי הזנחה
         self.neglect_thresholds = {
@@ -52,7 +53,8 @@ class NeglectDetector:
     
     def detect_neglect_patterns(self, audio: np.ndarray, sr: int, 
                               cry_segments: List[Dict] = None, 
-                              violence_segments: List[Dict] = None) -> Dict:
+                              violence_segments: List[Dict] = None,
+                              timeline=None) -> Dict:
         """
         Detect neglect patterns in the audio
         זיהוי דפוסי הזנחה באודיו
@@ -62,10 +64,22 @@ class NeglectDetector:
             sr: Sample rate
             cry_segments: Previously detected cry segments
             violence_segments: Previously detected violence segments
+            timeline: Optional ``audio_tagger.TagTimeline``; when given, staff
+                responses and adult-speech ratios come from the tagger's speech
+                probability instead of spectral heuristics.
             
         Returns:
             Dictionary containing neglect analysis results
         """
+        self._timeline = timeline
+        try:
+            return self._detect_neglect_patterns(audio, sr, cry_segments, violence_segments)
+        finally:
+            self._timeline = None
+
+    def _detect_neglect_patterns(self, audio: np.ndarray, sr: int,
+                                 cry_segments: List[Dict] = None,
+                                 violence_segments: List[Dict] = None) -> Dict:
         neglect_analysis = {
             'unanswered_cries': [],
             'prolonged_silence_periods': [],
@@ -142,7 +156,8 @@ class NeglectDetector:
             response_audio = audio[start_sample:end_sample]
             
             # Analyze response
-            has_response = self._detect_staff_response(response_audio, sr)
+            has_response = self._detect_staff_response(response_audio, sr,
+                                                       t0=response_start, t1=response_end)
             
             if not has_response:
                 # Calculate neglect severity for this episode
@@ -161,7 +176,8 @@ class NeglectDetector:
         
         return unanswered_cries
     
-    def _detect_staff_response(self, response_audio: np.ndarray, sr: int) -> bool:
+    def _detect_staff_response(self, response_audio: np.ndarray, sr: int,
+                               t0: float = None, t1: float = None) -> bool:
         """
         Detect if there was a staff response in the audio segment
         זיהוי אם הייתה תגובת צוות בקטע האודיו
@@ -169,12 +185,18 @@ class NeglectDetector:
         Args:
             response_audio: Audio segment to analyze
             sr: Sample rate
+            t0, t1: Absolute times of the segment (used with the tagger timeline)
             
         Returns:
             True if staff response detected
         """
         if len(response_audio) < sr * 0.5:  # Too short for analysis
             return False
+
+        if self._timeline is not None and t0 is not None:
+            if t1 is None:
+                t1 = t0 + len(response_audio) / sr
+            return self._timeline.score('speech_dominant', t0, t1) >= config.tagger.speech_threshold
         
         # Calculate energy and frequency characteristics
         rms_energy = librosa.feature.rms(y=response_audio)[0]
@@ -351,7 +373,7 @@ class NeglectDetector:
             window_end_time = end_sample / sr
             
             # Calculate adult speech ratio in this window
-            adult_speech_ratio = self._calculate_adult_speech_ratio(window, sr)
+            adult_speech_ratio = self._calculate_adult_speech_ratio(window, sr, t0=window_start_time)
             
             if adult_speech_ratio < adult_speech_threshold:
                 lack_of_interaction_periods.append({
@@ -364,7 +386,7 @@ class NeglectDetector:
         
         return lack_of_interaction_periods
     
-    def _calculate_adult_speech_ratio(self, audio: np.ndarray, sr: int) -> float:
+    def _calculate_adult_speech_ratio(self, audio: np.ndarray, sr: int, t0: float = None) -> float:
         """
         Calculate ratio of adult speech in audio segment
         חישוב יחס דיבור מבוגרים בקטע אודיו
@@ -372,10 +394,18 @@ class NeglectDetector:
         Args:
             audio: Audio segment
             sr: Sample rate
+            t0: Absolute start time of the segment (used with the tagger timeline)
             
         Returns:
             Ratio of adult speech (0-1)
         """
+        if self._timeline is not None and t0 is not None:
+            t1 = t0 + len(audio) / sr
+            scores = self._timeline.group_scores('speech_dominant')
+            mask = (self._timeline.starts >= t0) & (self._timeline.starts < t1)
+            if mask.any():
+                return float(np.mean(scores[mask] >= config.tagger.speech_threshold))
+            return 0.0
         # Segment into smaller chunks for analysis
         chunk_length = 2.0  # 2-second chunks
         chunk_samples = int(chunk_length * sr)
@@ -481,7 +511,8 @@ class NeglectDetector:
             response_audio = audio[start_sample:end_sample]
             
             # Check for appropriate response
-            has_appropriate_response = self._detect_appropriate_response(response_audio, sr, violence)
+            has_appropriate_response = self._detect_appropriate_response(
+                response_audio, sr, violence, t0=response_start, t1=response_end)
             
             if not has_appropriate_response:
                 ignored_distress_episodes.append({
@@ -497,7 +528,7 @@ class NeglectDetector:
         return ignored_distress_episodes
     
     def _detect_appropriate_response(self, response_audio: np.ndarray, sr: int, 
-                                   violence: Dict) -> bool:
+                                   violence: Dict, t0: float = None, t1: float = None) -> bool:
         """
         Detect if there was an appropriate response to violence
         זיהוי אם הייתה תגובה מתאימה לאלימות
@@ -514,7 +545,7 @@ class NeglectDetector:
             return False
         
         # Check for adult speech
-        has_adult_speech = self._detect_staff_response(response_audio, sr)
+        has_adult_speech = self._detect_staff_response(response_audio, sr, t0=t0, t1=t1)
         
         if not has_adult_speech:
             return False
@@ -529,7 +560,8 @@ class NeglectDetector:
             else:
                 # Check if there was immediate response in first 30 seconds
                 immediate_response = response_audio[:int(30 * sr)]
-                return self._detect_staff_response(immediate_response, sr)
+                return self._detect_staff_response(immediate_response, sr, t0=t0,
+                                                   t1=(t0 + 30) if t0 is not None else None)
         
         return True
     

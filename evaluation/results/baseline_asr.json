@@ -1,0 +1,23 @@
+{
+  "tag": "baseline_asr",
+  "generated": "2026-09-09 16:45",
+  "config_hash": "4407b47de0",
+  "tasks": {
+    "asr_he": [
+      {
+        "model": "base",
+        "n": 328,
+        "wer": 0.6614341776667856,
+        "cer": 0.28786282210939745,
+        "seconds": 135.19207000732422
+      },
+      {
+        "model": "ivrit-ai/whisper-large-v3-turbo-ct2",
+        "n": 328,
+        "wer": 0.21405636817695325,
+        "cer": 0.10818405338953284,
+        "seconds": 241.1297905445099
+      }
+    ]
+  }
+}
