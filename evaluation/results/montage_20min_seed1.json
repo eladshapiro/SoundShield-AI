@@ -1,0 +1,120 @@
+{
+  "minutes": 20.0,
+  "seed": 1,
+  "negative": {
+    "cry": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 0,
+      "true_detections": 0,
+      "false_detections": 0,
+      "false_per_hour": 0.0
+    },
+    "violence_any_vs_scream+anger": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 13,
+      "true_detections": 0,
+      "false_detections": 13,
+      "false_per_hour": 39.0
+    },
+    "shouting_vs_scream": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 4,
+      "true_detections": 0,
+      "false_detections": 4,
+      "false_per_hour": 12.0
+    },
+    "aggressive_tone_vs_anger": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 6,
+      "true_detections": 0,
+      "false_detections": 6,
+      "false_per_hour": 18.0
+    },
+    "concerning_emotion_vs_anger": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 25,
+      "true_detections": 0,
+      "false_detections": 25,
+      "false_per_hour": 75.0
+    },
+    "unanswered_cries": 0,
+    "cries_with_response": 0,
+    "models_used": [
+      "ast-tagger",
+      "hubert",
+      "wav2vec2-dim",
+      "whisper",
+      "diarizer"
+    ],
+    "pipeline_seconds": 70.50213313102722,
+    "realtime_factor": 17.020761595536648
+  },
+  "events": {
+    "cry": {
+      "events": 8,
+      "detected_events": 8,
+      "recall": 1.0,
+      "detections": 13,
+      "true_detections": 8,
+      "false_detections": 5,
+      "false_per_hour": 15.0
+    },
+    "violence_any_vs_scream+anger": {
+      "events": 16,
+      "detected_events": 7,
+      "recall": 0.4375,
+      "detections": 20,
+      "true_detections": 7,
+      "false_detections": 13,
+      "false_per_hour": 39.0
+    },
+    "shouting_vs_scream": {
+      "events": 9,
+      "detected_events": 5,
+      "recall": 0.5555555555555556,
+      "detections": 12,
+      "true_detections": 5,
+      "false_detections": 7,
+      "false_per_hour": 21.0
+    },
+    "aggressive_tone_vs_anger": {
+      "events": 7,
+      "detected_events": 1,
+      "recall": 0.14285714285714285,
+      "detections": 6,
+      "true_detections": 1,
+      "false_detections": 5,
+      "false_per_hour": 15.0
+    },
+    "concerning_emotion_vs_anger": {
+      "events": 7,
+      "detected_events": 5,
+      "recall": 0.7142857142857143,
+      "detections": 26,
+      "true_detections": 6,
+      "false_detections": 20,
+      "false_per_hour": 60.0
+    },
+    "unanswered_cries": 2,
+    "cries_with_response": 11,
+    "models_used": [
+      "ast-tagger",
+      "hubert",
+      "wav2vec2-dim",
+      "whisper",
+      "diarizer"
+    ],
+    "pipeline_seconds": 71.10915040969849,
+    "realtime_factor": 16.875465296465325
+  }
+}

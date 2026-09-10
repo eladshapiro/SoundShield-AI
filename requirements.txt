@@ -49,8 +49,15 @@ fpdf2>=2.7.0  # PDF report generation
 # hebpipe>=1.0.0
 
 # Advanced Models (Primary - used by default)
-openai-whisper>=20231117  # For transcription (REQUIRES FFmpeg - see INSTALL_FFMPEG.md)
-# faster-whisper>=1.0.0  # Optional: 4x faster, 75% less memory (uncomment to enable)
+openai-whisper>=20231117  # Fallback transcription backend (REQUIRES FFmpeg - see INSTALL_FFMPEG.md)
+faster-whisper>=1.1.0     # Primary transcription backend (CTranslate2); per-language models, GPU float16
+# CTranslate2 links against CUDA 12 while recent PyTorch wheels ship CUDA 13. These two wheels
+# provide the CUDA 12 runtime libraries that cuda_compat.py pre-loads (Linux/Windows with NVIDIA GPU).
+nvidia-cublas-cu12; platform_system != "Darwin"
+nvidia-cudnn-cu12>=9,<10; platform_system != "Darwin"
+# AudioSet event tagger (audio_tagger.py) and dimensional emotion model (emotion_models.py) are
+# plain `transformers` models: MIT/ast-finetuned-audioset-10-10-0.4593 and
+# audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim (downloaded on first use, ~1.6 GB total).
 # transformers>=4.30.0  # Already listed above
 pyannote.audio>=3.1.0  # For speaker diarization
 # torch>=2.0.0  # Already listed above

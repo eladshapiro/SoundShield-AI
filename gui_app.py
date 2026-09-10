@@ -493,125 +493,33 @@ class ModernGUI:
         try:
             file_path = self.current_file
             
-            # Step 1: Basic audio analysis
-            step1_msg = f"{self.t('step')} 1/7: {self.t('analyzing')}"
-            self.update_status(step1_msg)
-            self.update_progress(5)
-            self.root.after(0, lambda: self.update_results(f"🔍 {self.t('step')} 1: {self.t('analyzing')}\n"
-                                                           "   - Loading audio file\n"
-                                                           "   - Extracting audio features\n"
-                                                           "   - Identifying segments\n"))
-            
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"File not found: {file_path}")
-            
-            audio_analysis = self.analyzer.audio_analyzer.analyze_audio_file(file_path)
-            self.update_progress(15)
-            
-            # Step 2: Emotion detection
-            step2_msg = f"{self.t('step')} 2/7: {self.t('detecting_emotions')}"
-            self.update_status(step2_msg)
-            self.update_progress(20)
-            self.root.after(0, lambda: self.update_results(f"😊 {self.t('step')} 2: {self.t('detecting_emotions')}\n"
-                                                           "   - Analyzing emotional patterns\n"
-                                                           "   - Identifying concerning emotions\n"))
-            
-            emotion_results = self.analyzer.emotion_detector.analyze_segment_emotions(
-                audio_analysis['segments'], 
-                audio_analysis['sample_rate']
-            )
-            concerning_emotions = self.analyzer.emotion_detector.detect_concerning_emotions(emotion_results)
-            self.update_progress(35)
-            
-            # Step 3: Cry detection
-            step3_msg = f"{self.t('step')} 3/7: {self.t('detecting_cries')}"
-            self.update_status(step3_msg)
-            self.update_progress(40)
-            self.root.after(0, lambda: self.update_results(f"👶 {self.t('step')} 3: {self.t('detecting_cries')}\n"
-                                                           "   - Identifying cry patterns\n"
-                                                           "   - Checking for responses\n"))
-            
-            audio, sr = self.analyzer.audio_analyzer.load_audio(file_path)
-            cry_segments = self.analyzer.cry_detector.detect_cry_segments(audio, sr)
-            cry_with_responses = self.analyzer.cry_detector.detect_response_to_cry(audio, sr, cry_segments)
-            self.update_progress(55)
-            
-            # Step 4: Violence detection
-            step4_msg = f"{self.t('step')} 4/7: {self.t('detecting_violence')}"
-            self.update_status(step4_msg)
-            self.update_progress(60)
-            self.root.after(0, lambda: self.update_results(f"⚠️ {self.t('step')} 4: {self.t('detecting_violence')}\n"
-                                                           "   - Analyzing aggressive patterns\n"
-                                                           "   - Identifying potential threats\n"))
-            
-            violence_segments = self.analyzer.violence_detector.detect_violence_segments(audio, sr)
-            self.update_progress(70)
-            
-            # Step 5: Neglect detection
-            step5_msg = f"{self.t('step')} 5/7: {self.t('detecting_neglect')}"
-            self.update_status(step5_msg)
-            self.update_progress(75)
-            self.root.after(0, lambda: self.update_results(f"🚨 {self.t('step')} 5: {self.t('detecting_neglect')}\n"
-                                                           "   - Analyzing response patterns\n"
-                                                           "   - Identifying neglect indicators\n"))
-            
-            neglect_analysis = self.analyzer.neglect_detector.detect_neglect_patterns(
-                audio, sr, cry_segments, violence_segments
-            )
-            self.update_progress(80)
-            
-            # Step 6: Advanced analysis (if available)
-            advanced_analysis = {}
-            if self.analyzer.advanced_analyzer and self.analyzer.advanced_analyzer.models_loaded:
-                step6_msg = f"{self.t('step')} 6/7: {self.t('advanced_analysis')}"
-                self.update_status(step6_msg)
-                self.update_progress(82)
-                self.root.after(0, lambda: self.update_results(f"🤖 {self.t('step')} 6: {self.t('advanced_analysis')}\n"
-                                                               "   - Using ML models\n"
-                                                               "   - Deep analysis in progress\n"))
-                try:
-                    # Pass language to advanced analyzer
-                    advanced_analysis = self.analyzer.advanced_analyzer.comprehensive_analysis(
-                        file_path, language=self.language
-                    )
-                    self.update_progress(88)
-                except Exception as e:
-                    print(f"Advanced analysis error: {e}")
-            
-            # Step 7: Language detection
-            inappropriate_language = {}
-            if self.analyzer.language_detector:
-                step7_msg = f"{self.t('step')} 7/7: {self.t('detecting_language')}"
-                self.update_status(step7_msg)
-                self.update_progress(90)
-                self.root.after(0, lambda: self.update_results(f"🔤 {self.t('step')} 7: {self.t('detecting_language')}\n"
-                                                               "   - Transcribing audio\n"
-                                                               "   - Checking for inappropriate words\n"))
-                try:
-                    # Pass language to language detector
-                    inappropriate_language = self.analyzer.language_detector.analyze_with_whisper(
-                        file_path, language=self.language
-                    )
-                    self.update_progress(95)
-                except Exception as e:
-                    print(f"Language detection error: {e}")
-            
-            # Compile results
-            analysis_results = {
-                'file_path': file_path,
-                'duration': audio_analysis['duration'],
-                'audio_analysis': audio_analysis,
-                'emotion_results': emotion_results,
-                'concerning_emotions': concerning_emotions,
-                'cry_segments': cry_segments,
-                'cry_with_responses': cry_with_responses,
-                'violence_segments': violence_segments,
-                'neglect_analysis': neglect_analysis,
-                'advanced_analysis': advanced_analysis,
-                'inappropriate_language': inappropriate_language,
-                'analysis_timestamp': time.time(),
-                'language': self.language
+
+            # The orchestrator runs the 7-step pipeline (ML timelines, detectors,
+            # Whisper, diarization) — identical to the CLI and the web app.
+            step_labels = {
+                1: ('analyzing', "🔍", "   - Loading audio file\n   - Extracting audio features\n   - Tagging events with ML\n"),
+                2: ('detecting_emotions', "😊", "   - Neural emotion models\n   - Identifying concerning emotions\n"),
+                3: ('detecting_cries', "👶", "   - Identifying cry patterns\n   - Checking for responses\n"),
+                4: ('detecting_violence', "⚠️", "   - Analyzing aggressive patterns\n   - Identifying potential threats\n"),
+                5: ('detecting_neglect', "🚨", "   - Analyzing response patterns\n   - Identifying neglect indicators\n"),
+                6: ('advanced_analysis', "🤖", "   - Whisper transcription\n   - Deep analysis in progress\n"),
+                7: ('detecting_language', "🔤", "   - Checking transcript for inappropriate words\n"),
             }
+            progress_marks = {1: 10, 2: 30, 3: 45, 4: 60, 5: 72, 6: 82, 7: 92}
+
+            def _progress(current: int, total: int, message: str):
+                key, icon, detail = step_labels.get(current, ('analyzing', "🔍", ""))
+                label = self.t(key)
+                self.update_status(f"{self.t('step')} {current}/7: {label}")
+                self.update_progress(progress_marks.get(current, 50))
+                self.root.after(0, lambda: self.update_results(f"{icon} {self.t('step')} {current}: {label}\n{detail}"))
+
+            analysis_results = self.analyzer.analyze_audio_file(
+                file_path, language=self.language, progress_callback=_progress
+            )
+            self.update_progress(95)
             
             # Generate report
             self.update_status(self.t('generating_report'))

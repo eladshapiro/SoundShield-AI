@@ -2,6 +2,56 @@
 
 All notable changes to SoundShield-AI are documented here.
 
+## [3.0.0] - 2026-09-09
+
+### Changed — ML-first detection, validated on real audio
+The v2.x detectors were tuned on synthetic tones. Measured on ~7,000 public,
+labelled real-world clips (`evaluation/`), the spectral heuristics flagged 76% of
+non-cry sounds as crying, missed 87% of screams, and could never detect a staff
+response (the response test compared a spectral centroid against 100 Hz). v3.0
+replaces them as the primary path with pretrained audio models and keeps them
+only as a fallback when the models are unavailable.
+
+- **AudioSet event tagger** (`audio_tagger.py`, Audio Spectrogram Transformer,
+  527 classes): window-level timeline of cry / scream / speech / laughter / impact
+  probabilities, computed once per recording on the GPU when available.
+  Cry detection on held-out clips: precision 0.97, recall 0.88 (v2.5: 0.17 / 0.91).
+- **Dimensional emotion model** (`emotion_models.py`, audeering wav2vec2 MSP-Dim):
+  arousal / dominance / valence per 5 s window — language-independent, so it works
+  for Hebrew speech where the English HuBERT classifier does not. Anger rule =
+  high arousal + high dominance + (low valence or HuBERT agrees).
+- **Violence detector**: `shouting` from the scream/shout tags, `aggressive_tone`
+  from speech-gated arousal/dominance/valence, `potential_physical_violence` from
+  impact tags. Held-out F1 0.77 (v2.5: 0.08).
+- **Staff-response / neglect logic** now uses the tagger's speech probability with
+  a "speech must dominate crying" rule (held-out F1 0.98 for adult-speech
+  presence; v2.5: 0.00).
+- **Per-language Whisper**: Hebrew uses `ivrit-ai/whisper-large-v3-turbo-ct2`
+  (21.4% WER on FLEURS he_il vs 66.1% for `base`); English uses `large-v3-turbo`
+  (4.4% vs 5.8% WER on LibriSpeech). faster-whisper runs on the GPU (float16)
+  with CUDA-12 runtime pre-loading (`cuda_compat.py`). Transcription runs once
+  and is shared with the inappropriate-language detector (previously Whisper
+  `base` was loaded and run a second time).
+- Web app and desktop GUI now delegate to `KindergartenRecordingAnalyzer`
+  instead of carrying their own copies of the pipeline.
+- All operating points live in `config.py` / `.env` and were chosen on the dev
+  split of the evaluation suite; reported numbers are from the held-out split.
+- Severity of `aggression` (dimensional model only) is one level below `anger`
+  (both models agree). `EMOTION_MIN_WINDOWS` can require sustained anger.
+
+### Added
+- `evaluation/` — dataset preparation, per-task manifests, runners, metrics,
+  dev-tuned threshold sweep (`fusion.py`), long-recording montage test
+  (`montage.py`), results in `evaluation/results/`.
+- `tests/test_audio_tagger.py`, `tests/test_emotion_models.py`,
+  `tests/test_ml_integration.py` (32 tests, no model download needed).
+- `requirements-eval.txt`.
+
+### Fixed
+- HuBERT pipeline ran on CPU even with a GPU present.
+- `analyze_with_whisper` in the language detector loaded its own Whisper model
+  on every call.
+
 ## [2.5.0] - 2026-03-31
 
 ### Added — Sprints 17-20

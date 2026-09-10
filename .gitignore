@@ -67,3 +67,6 @@ desktop.ini
 *.user
 *.suo
 soundshield.db
+data/
+.venv/
+soundshield.log

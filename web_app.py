@@ -267,151 +267,31 @@ def run_analysis_with_progress(analyzer, file_path, language, progress_callback)
     }
     
     lang_dict = translations.get(language, translations['en'])
-    
-    # Step 1: Basic audio analysis
-    progress_callback(1, lang_dict['step1'])
-    safe_print(f"🔄 {lang_dict['step1']}")
-    audio_analysis = analyzer.audio_analyzer.analyze_audio_file(file_path)
-    safe_print(f"✅ {lang_dict['step1']} completed")
-    
-    # Step 2: Emotion detection
-    progress_callback(2, lang_dict['step2'])
-    safe_print(f"🔄 {lang_dict['step2']}")
-    emotion_results = analyzer.emotion_detector.analyze_segment_emotions(
-        audio_analysis['segments'], 
-        audio_analysis['sample_rate']
+
+    def _progress(current: int, total: int, message: str):
+        key = f'step{current}'
+        text = lang_dict.get(key, message)
+        progress_callback(min(current, 7), text)
+        safe_print(f"🔄 {text}")
+
+    # Single source of truth: the orchestrator runs the 7-step pipeline
+    # (ML timelines, detectors, Whisper, diarization) exactly as the CLI does.
+    analysis_results = analyzer.analyze_audio_file(
+        file_path, language=language, progress_callback=_progress
     )
-    concerning_emotions = analyzer.emotion_detector.detect_concerning_emotions(emotion_results)
-    safe_print(f"✅ {lang_dict['step2']} completed")
-    
-    # Step 3: Cry detection
-    progress_callback(3, lang_dict['step3'])
-    safe_print(f"🔄 {lang_dict['step3']}")
-    audio, sr = analyzer.audio_analyzer.load_audio(file_path)
-    cry_segments = analyzer.cry_detector.detect_cry_segments(audio, sr)
-    cry_with_responses = analyzer.cry_detector.detect_response_to_cry(audio, sr, cry_segments)
-    safe_print(f"✅ {lang_dict['step3']} completed")
-    
-    # Step 4: Violence detection
-    progress_callback(4, lang_dict['step4'])
-    safe_print(f"🔄 {lang_dict['step4']}")
-    violence_segments = analyzer.violence_detector.detect_violence_segments(audio, sr)
-    safe_print(f"✅ {lang_dict['step4']} completed")
-    
-    # Step 5: Neglect detection
-    progress_callback(5, lang_dict['step5'])
-    safe_print(f"🔄 {lang_dict['step5']}")
-    neglect_analysis = analyzer.neglect_detector.detect_neglect_patterns(
-        audio, sr, cry_segments, violence_segments
-    )
-    safe_print(f"✅ {lang_dict['step5']} completed")
-    
-    # Step 6: Advanced analysis
-    advanced_analysis = {}
-    if analyzer.advanced_analyzer and analyzer.advanced_analyzer.models_loaded:
-        progress_callback(6, lang_dict['step6'])
-        safe_print(f"🔄 {lang_dict['step6']}")
-        try:
-            advanced_analysis = analyzer.advanced_analyzer.comprehensive_analysis(file_path, language=language)
-            safe_print(f"✅ {lang_dict['step6']} completed")
-        except Exception as e:
-            safe_print(f"⚠️ Error in advanced analysis: {e}")
-    else:
-        # Skip step 6 if not available
-        safe_print(f"⏭️ Skipping {lang_dict['step6']} (not available)")
-    
-    # Step 7: Inappropriate language detection
-    inappropriate_language = {}
-    if analyzer.language_detector:
-        progress_callback(7, lang_dict['step7'])
-        safe_print(f"🔄 {lang_dict['step7']}")
-        try:
-            inappropriate_language = analyzer.language_detector.analyze_with_whisper(file_path, language=language)
-            
-            # Check if there was an error
-            if inappropriate_language.get('status') == 'error':
-                safe_print(f"⚠️ Error in language detection: {inappropriate_language.get('error', 'Unknown error')}")
-            elif inappropriate_language.get('status') == 'whisper_not_installed':
-                safe_print(f"⚠️ Whisper not installed: {inappropriate_language.get('error', 'Unknown error')}")
-            elif inappropriate_language.get('detected_inappropriate_words', 0) > 0:
-                safe_print(f"⚠️ Detected {inappropriate_language['detected_inappropriate_words']} inappropriate words")
-            else:
-                safe_print("✅ No inappropriate language detected")
-            
-            safe_print(f"✅ {lang_dict['step7']} completed")
-        except Exception as e:
-            safe_print(f"⚠️ Error in language detection: {e}")
-            import traceback
-            traceback.print_exc()
-    else:
-        # Skip step 7 if not available
-        safe_print(f"⏭️ Skipping {lang_dict['step7']} (not available)")
-    
+
+    inappropriate_language = analysis_results.get('inappropriate_language') or {}
+    if inappropriate_language.get('status') == 'error':
+        safe_print(f"⚠️ Error in language detection: {inappropriate_language.get('error', 'Unknown error')}")
+    elif inappropriate_language.get('detected_inappropriate_words', 0) > 0:
+        safe_print(f"⚠️ Detected {inappropriate_language['detected_inappropriate_words']} inappropriate words")
+
     # Generate report
     progress_callback(7, lang_dict['generating_report'])
     safe_print(f"🔄 {lang_dict['generating_report']}")
-    
-    # Speaker diarization
-    diarization_results = {}
-    if hasattr(analyzer, 'speaker_diarizer') and analyzer.speaker_diarizer:
-        try:
-            speaker_segments = analyzer.speaker_diarizer.get_speaker_segments(file_path)
-            diarization_results = analyzer.speaker_diarizer.get_summary(speaker_segments)
-            diarization_results['segments'] = speaker_segments
-            safe_print(f"Diarization: {diarization_results.get('speaker_count', 0)} speakers")
-        except Exception as e:
-            safe_print(f"Diarization error: {e}")
-
-    # Track which models were used
-    models_used = []
-    hubert_used = (analyzer.advanced_analyzer and
-                   hasattr(analyzer.advanced_analyzer, 'hubert_loaded') and
-                   analyzer.advanced_analyzer.hubert_loaded)
-    if hubert_used:
-        models_used.append('hubert')
-    if analyzer.advanced_analyzer and hasattr(analyzer.advanced_analyzer, 'whisper_loaded') and analyzer.advanced_analyzer.whisper_loaded:
-        models_used.append('whisper')
-    if hasattr(analyzer, 'speaker_diarizer') and analyzer.speaker_diarizer:
-        models_used.append('diarizer')
-
-    # Use HuBERT as primary for emotions when available
-    if hubert_used:
-        try:
-            advanced_emotions = analyzer.advanced_analyzer.detect_concerning_emotions_advanced(file_path)
-            if advanced_emotions:
-                concerning_emotions = analyzer.emotion_detector.merge_with_advanced_results(
-                    concerning_emotions, advanced_emotions
-                )
-                safe_print(f"HuBERT merged {len(advanced_emotions)} emotion detections")
-        except Exception as e:
-            safe_print(f"HuBERT emotion merge error: {e}")
-    else:
-        for e in concerning_emotions:
-            e['ml_backed'] = False
-
-    # Compile results
-    analysis_results = {
-        'file_path': file_path,
-        'duration': audio_analysis['duration'],
-        'audio_analysis': audio_analysis,
-        'emotion_results': emotion_results,
-        'concerning_emotions': concerning_emotions,
-        'cry_segments': cry_segments,
-        'cry_with_responses': cry_with_responses,
-        'violence_segments': violence_segments,
-        'neglect_analysis': neglect_analysis,
-        'advanced_analysis': advanced_analysis,
-        'diarization': diarization_results,
-        'inappropriate_language': inappropriate_language,
-        'models_used': models_used,
-        'analysis_timestamp': time.time(),
-        'language': language
-    }
-    
-    # Generate report
     report = analyzer.generate_report(analysis_results)
     analysis_results['report'] = report
-    
+
     return analysis_results
 
 def allowed_file(filename):
@@ -746,11 +626,16 @@ def health_check():
     models = {
         'whisper': False,
         'hubert': False,
+        'audio_tagger': False,
+        'dimensional_emotion': False,
     }
     if analyzer and hasattr(analyzer, 'advanced_analyzer') and analyzer.advanced_analyzer:
         aa = analyzer.advanced_analyzer
-        models['whisper'] = getattr(aa, 'whisper_model', None) is not None
+        models['whisper'] = bool(getattr(aa, 'whisper_loaded', False)) or getattr(aa, 'whisper_model', None) is not None
         models['hubert'] = getattr(aa, 'emotion_model', None) is not None
+        models['dimensional_emotion'] = bool(getattr(aa, 'dim_emotion_loaded', False))
+    if analyzer and getattr(analyzer, 'tagger', None) is not None:
+        models['audio_tagger'] = bool(analyzer.tagger.loaded)
 
     try:
         import torch

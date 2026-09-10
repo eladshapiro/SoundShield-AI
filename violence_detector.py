@@ -58,7 +58,8 @@ class ViolenceDetector:
             'continued_distress_threshold': cfg.continued_distress
         }
     
-    def detect_violence_segments(self, audio: np.ndarray, sr: int) -> List[Dict]:
+    def detect_violence_segments(self, audio: np.ndarray, sr: int,
+                                 timeline=None, emotion_timeline=None) -> List[Dict]:
         """
         Detect potential violence in audio segments
         זיהוי אלימות פוטנציאלית בקטעי אודיו
@@ -66,10 +67,19 @@ class ViolenceDetector:
         Args:
             audio: Audio data
             sr: Sample rate
+            timeline: Optional ``audio_tagger.TagTimeline`` (scream / shout /
+                impact / speech probabilities).
+            emotion_timeline: Optional ``emotion_models.EmotionTimeline``
+                (arousal / dominance for aggressive adult speech).
+            When either timeline is given the ML path is used and segments
+            carry ``ml_backed=True``; otherwise the spectral heuristics run.
             
         Returns:
             List of detected violence segments with analysis
         """
+        if timeline is not None or emotion_timeline is not None:
+            return self._detect_violence_segments_ml(audio, sr, timeline, emotion_timeline)
+
         violence_segments = []
         
         # Analyze in 1-second segments with 0.5-second overlap
@@ -108,6 +118,101 @@ class ViolenceDetector:
         
         return context_analyzed
     
+    def _detect_violence_segments_ml(self, audio: np.ndarray, sr: int,
+                                     timeline, emotion_timeline) -> List[Dict]:
+        """Violence segments from model timelines (ML-first path).
+
+        * ``shouting``                    — tagger scream/shout/yell probability
+        * ``potential_physical_violence`` — tagger impact sounds (slap, whack, smash)
+        * ``aggressive_tone``             — high arousal AND high dominance in
+          adult speech (dimensional emotion model), gated by the tagger so a
+          crying child is not mistaken for an aggressive adult
+        """
+        tcfg = config.tagger
+        duration = len(audio) / sr
+        n = int(np.ceil(duration))
+        if n <= 0:
+            return []
+        types_per_sec: List[set] = [set() for _ in range(n)]
+        score_per_sec = np.zeros(n, dtype=np.float32)
+
+        def mark(t0: float, t1: float, vtype: str, score: float):
+            for t in range(max(0, int(t0)), min(n, int(np.ceil(t1)))):
+                types_per_sec[t].add(vtype)
+                score_per_sec[t] = max(score_per_sec[t], score)
+
+        if timeline is not None:
+            scream = timeline.group_scores('scream')
+            impact = timeline.group_scores('impact')
+            for i, start in enumerate(timeline.starts):
+                end = start + timeline.window
+                if scream[i] >= tcfg.scream_threshold:
+                    mark(start, end, 'shouting', float(scream[i]))
+                if impact[i] >= tcfg.impact_threshold:
+                    mark(start, end, 'potential_physical_violence', float(impact[i]))
+
+        if emotion_timeline is not None and emotion_timeline.has_dimensional:
+            from emotion_models import aggressive_rule
+            for i, start in enumerate(emotion_timeline.starts):
+                end = start + emotion_timeline.window
+                flag, score = aggressive_rule(float(emotion_timeline.arousal[i]),
+                                              float(emotion_timeline.dominance[i]),
+                                              float(emotion_timeline.valence[i]))
+                if not flag:
+                    continue
+                if timeline is not None:
+                    # must be speech that dominates any crying: a distressed child
+                    # also scores high on arousal, but is not an aggressive adult
+                    if timeline.score('speech_dominant', start, end) < tcfg.speech_threshold:
+                        continue
+                mark(start, end, 'aggressive_tone', score)
+
+        segments = []
+        t = 0
+        while t < n:
+            if not types_per_sec[t]:
+                t += 1
+                continue
+            j = t
+            while j + 1 < n and types_per_sec[j + 1]:
+                j += 1
+            start, end = float(t), float(min(j + 1, duration))
+            seg_audio = audio[int(start * sr):int(end * sr)]
+            features = self._ml_segment_features(seg_audio, sr)
+            if timeline is not None:
+                features['ml_scores'] = {g: timeline.score(g, start, end)
+                                         for g in ('scream', 'impact', 'speech', 'cry')}
+                features['top_labels'] = timeline.top_labels(start, end, 3)
+            if emotion_timeline is not None and emotion_timeline.has_dimensional:
+                features['arousal'] = emotion_timeline.score('arousal', start, end)
+                features['dominance'] = emotion_timeline.score('dominance', start, end)
+            types = sorted(set().union(*types_per_sec[t:j + 1]))
+            segments.append({
+                'start_time': start,
+                'end_time': end,
+                'duration': end - start,
+                'features': features,
+                'violence_types': types,
+                'severity': self._calculate_severity(features, types),
+                'confidence': float(score_per_sec[t:j + 1].max()),
+                'ml_backed': True,
+            })
+            t = j + 1
+
+        merged = self._merge_violence_segments(segments)
+        return self._analyze_violence_context(audio, sr, merged, timeline=timeline)
+
+    def _ml_segment_features(self, audio: np.ndarray, sr: int) -> Dict:
+        """Cheap energy features used by severity scoring for ML segments."""
+        if len(audio) == 0:
+            return {'mean_energy': 0.0, 'max_energy': 0.0, 'temporal_instability': 0.0}
+        rms = librosa.feature.rms(y=audio)[0]
+        return {
+            'mean_energy': float(np.mean(rms)),
+            'max_energy': float(np.max(rms)),
+            'temporal_instability': float(self._calculate_temporal_instability(audio, sr)),
+        }
+
     def _calculate_violence_features(self, audio: np.ndarray, sr: int) -> Dict:
         """
         Calculate features specific to violence detection
@@ -370,14 +475,16 @@ class ViolenceDetector:
                     'features': current['features'],
                     'violence_types': list(set(last['violence_types'] + current['violence_types'])),
                     'severity': max(last['severity'], current['severity'], key=lambda x: ['low', 'medium', 'high', 'critical'].index(x)),
-                    'confidence': max(last['confidence'], current['confidence'])
+                    'confidence': max(last['confidence'], current['confidence']),
+                    'ml_backed': bool(last.get('ml_backed', False) or current.get('ml_backed', False)),
                 }
             else:
                 merged.append(current)
         
         return merged
     
-    def _analyze_violence_context(self, audio: np.ndarray, sr: int, violence_segments: List[Dict]) -> List[Dict]:
+    def _analyze_violence_context(self, audio: np.ndarray, sr: int, violence_segments: List[Dict],
+                                  timeline=None) -> List[Dict]:
         """
         Analyze context around violence incidents
         ניתוח הקשר סביב אירועי אלימות
@@ -393,7 +500,7 @@ class ViolenceDetector:
         enhanced_segments = []
         
         for segment in violence_segments:
-            context_analysis = self._analyze_single_violence_context(audio, sr, segment)
+            context_analysis = self._analyze_single_violence_context(audio, sr, segment, timeline=timeline)
             
             enhanced_segment = segment.copy()
             enhanced_segment['context'] = context_analysis
@@ -407,7 +514,8 @@ class ViolenceDetector:
         
         return enhanced_segments
     
-    def _analyze_single_violence_context(self, audio: np.ndarray, sr: int, segment: Dict) -> Dict:
+    def _analyze_single_violence_context(self, audio: np.ndarray, sr: int, segment: Dict,
+                                         timeline=None) -> Dict:
         """
         Analyze context for a single violence segment
         ניתוח הקשר עבור קטע אלימות יחיד
@@ -432,7 +540,9 @@ class ViolenceDetector:
         before_audio = audio[int(before_start * sr):int(before_end * sr)]
         
         if len(before_audio) > 0:
-            context['before_violence'] = self._analyze_context_period(before_audio, sr)
+            context['before_violence'] = (self._analyze_context_period_ml(timeline, before_start, before_end)
+                                          if timeline is not None else
+                                          self._analyze_context_period(before_audio, sr))
         
         # Analyze period after violence
         after_start = segment['end_time']
@@ -440,13 +550,36 @@ class ViolenceDetector:
         after_audio = audio[int(after_start * sr):int(after_end * sr)]
         
         if len(after_audio) > 0:
-            context['after_violence'] = self._analyze_context_period(after_audio, sr)
+            context['after_violence'] = (self._analyze_context_period_ml(timeline, after_start, after_end)
+                                         if timeline is not None else
+                                         self._analyze_context_period(after_audio, sr))
         
         # Overall assessment
         context['overall_assessment'] = self._assess_overall_context(context)
         
         return context
     
+    def _analyze_context_period_ml(self, timeline, t0: float, t1: float) -> Dict:
+        """Context classification from tagger probabilities (mirrors the heuristic labels)."""
+        tcfg = config.tagger
+        if t1 - t0 < 0.1:
+            return {'has_activity': False, 'activity_type': 'unknown', 'intensity': 'low'}
+        cry = timeline.score('cry', t0, t1)
+        speech = timeline.score('speech', t0, t1)
+        scream = timeline.score('scream', t0, t1)
+        peak = max(cry, speech, scream)
+        if peak < min(tcfg.cry_threshold, tcfg.speech_threshold, tcfg.scream_threshold):
+            return {'has_activity': False, 'activity_type': 'silence', 'intensity': 'low'}
+        if cry >= tcfg.cry_threshold and cry >= speech:
+            activity_type = 'distress'
+        elif timeline.score('speech_dominant', t0, t1) >= tcfg.speech_threshold:
+            activity_type = 'adult_speech'
+        else:
+            activity_type = 'mixed'
+        intensity = 'low' if peak < 0.4 else ('medium' if peak < 0.7 else 'high')
+        return {'has_activity': True, 'activity_type': activity_type, 'intensity': intensity,
+                'cry_score': cry, 'speech_score': speech, 'scream_score': scream}
+
     def _analyze_context_period(self, audio: np.ndarray, sr: int) -> Dict:
         """
         Analyze a specific time period for context

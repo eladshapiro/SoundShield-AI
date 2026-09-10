@@ -1,0 +1,5 @@
+# Extra dependencies for the real-audio evaluation suite (evaluation/)
+-r requirements.txt
+pytest>=7.0
+pyarrow>=14.0       # CREMA-D parquet mirror
+jiwer>=3.0          # WER / CER for the ASR benchmarks
