@@ -25,6 +25,23 @@ if sys.platform == 'win32':
 
 logger = logging.getLogger(__name__)
 
+
+def _json_default(obj):
+    """json.dump fallback for numpy scalars/arrays and other non-JSON values."""
+    try:
+        import numpy as _np
+        if isinstance(obj, _np.generic):
+            return obj.item()
+        if isinstance(obj, _np.ndarray):
+            return obj.tolist()
+    except ImportError:  # pragma: no cover
+        pass
+    if isinstance(obj, (set, tuple)):
+        return list(obj)
+    if hasattr(obj, 'isoformat'):
+        return obj.isoformat()
+    return str(obj)
+
 class ReportGenerator:
     def __init__(self, output_dir: str = "reports"):
         """
@@ -247,8 +264,9 @@ class ReportGenerator:
         # Count incidents
         emotion_incidents = len(analysis_results.get('concerning_emotions', []))
         violence_incidents = len(analysis_results.get('violence_segments', []))
-        unanswered_cries = len(analysis_results.get('unanswered_cries', []))
-        neglect_incidents = len(analysis_results.get('ignored_distress_episodes', []))
+        neglect_info = analysis_results.get('neglect_analysis', {}) or {}
+        unanswered_cries = len(neglect_info.get('unanswered_cries', []))
+        neglect_incidents = len(neglect_info.get('ignored_distress_episodes', []))
         
         # Count inappropriate language incidents
         inappropriate_lang = analysis_results.get('inappropriate_language', {})
@@ -314,6 +332,7 @@ class ReportGenerator:
         # Adjust critical count for inappropriate language
         if critical_inappropriate > 0:
             critical_count += critical_inappropriate
+            summary['critical_incidents'] = critical_count
         
         # Confidence-weighted severity aggregation
         # Each detection contributes severity_weight * confidence
@@ -509,8 +528,9 @@ class ReportGenerator:
         # Count total incidents
         emotion_incidents = len(analysis_results.get('concerning_emotions', []))
         violence_incidents = len(analysis_results.get('violence_segments', []))
-        unanswered_cries = len(analysis_results.get('unanswered_cries', []))
-        neglect_incidents = len(analysis_results.get('ignored_distress_episodes', []))
+        neglect_info = analysis_results.get('neglect_analysis', {}) or {}
+        unanswered_cries = len(neglect_info.get('unanswered_cries', []))
+        neglect_incidents = len(neglect_info.get('ignored_distress_episodes', []))
         
         stats['total_incidents'] = emotion_incidents + violence_incidents + unanswered_cries + neglect_incidents
         
@@ -650,8 +670,12 @@ class ReportGenerator:
         filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         filepath = os.path.join(self.output_dir, filename)
         
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(report, f, ensure_ascii=False, indent=2)
+        # Write atomically with a numpy-safe encoder: a failed dump must never
+        # leave a truncated report behind (that used to break /reports).
+        tmp_path = filepath + '.tmp'
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(report, f, ensure_ascii=False, indent=2, default=_json_default)
+        os.replace(tmp_path, filepath)
         
         logger.info(f"JSON report saved: {filepath}")
     

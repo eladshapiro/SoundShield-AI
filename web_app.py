@@ -315,6 +315,96 @@ def admin_dashboard():
     """Admin dashboard for system monitoring and threshold tuning."""
     return render_template('admin.html')
 
+def _build_analysis_payload(results: dict, filename: str) -> dict:
+    """Shape analyzer output for the dashboard.
+
+    Shared by the synchronous ``/upload`` route and the async ``/job-status``
+    route so both return exactly the same JSON.
+    """
+    report = results.get('report', {}) or {}
+    inappropriate_lang = results.get('inappropriate_language', {}) or {}
+    inappropriate_words_list = []
+    if inappropriate_lang.get('words_by_severity'):
+        for severity, words in inappropriate_lang['words_by_severity'].items():
+            inappropriate_words_list.extend(words)
+
+    audio_clips = report.get('audio_clips', [])
+
+    # Collect all incidents with timing for waveform overlays
+    all_incidents = []
+    for e in results.get('concerning_emotions', []):
+        all_incidents.append({
+            'type': 'emotion',
+            'start_time': e.get('start_time', 0),
+            'end_time': e.get('end_time', 0),
+            'severity': e.get('severity', 'low'),
+            'label': e.get('detected_emotion', ''),
+            'confidence': e.get('confidence', 0),
+            'ml_backed': e.get('ml_backed', False),
+        })
+    for v in results.get('violence_segments', []):
+        all_incidents.append({
+            'type': 'violence',
+            'start_time': v.get('start_time', 0),
+            'end_time': v.get('end_time', 0),
+            'severity': v.get('adjusted_severity', 'low'),
+            'label': ', '.join(v.get('violence_types', [])),
+            'confidence': v.get('confidence', 0),
+            'ml_backed': v.get('ml_backed', False),
+        })
+    for c in results.get('cry_with_responses', []):
+        all_incidents.append({
+            'type': 'cry',
+            'start_time': c.get('start_time', 0),
+            'end_time': c.get('end_time', 0),
+            'severity': c.get('intensity', 'medium'),
+            'label': 'response' if c.get('response_detected') else 'no_response',
+            'confidence': c.get('confidence', 0),
+            'ml_backed': c.get('ml_backed', False),
+        })
+    neglect_a = results.get('neglect_analysis', {}) or {}
+    for n in neglect_a.get('unanswered_cries', []):
+        all_incidents.append({
+            'type': 'neglect',
+            'start_time': n.get('cry_start_time', 0),
+            'end_time': n.get('cry_end_time', 0),
+            'severity': n.get('neglect_severity', 'medium'),
+            'label': 'unanswered_cry',
+        })
+    for w in inappropriate_lang.get('inappropriate_words', []) or []:
+        if isinstance(w, dict) and w.get('timestamp') is not None:
+            all_incidents.append({
+                'type': 'language',
+                'start_time': w.get('timestamp', 0),
+                'end_time': w.get('end_time', w.get('timestamp', 0)),
+                'severity': w.get('severity', 'medium'),
+                'label': w.get('word', ''),
+            })
+
+    return {
+        'success': True,
+        'message': 'Analysis completed successfully',
+        'filename': filename,
+        'results': {
+            'summary': report.get('summary', {}),
+            'statistics': report.get('statistics', {}),
+            'detailed_findings': report.get('detailed_findings', {}),
+            'metadata': report.get('metadata', {}),
+            'recommendations': report.get('recommendations', []),
+        },
+        'incidents': all_incidents,
+        'duration': results.get('duration', 0),
+        'models_used': results.get('models_used', []),
+        'audio_clips': audio_clips,
+        'diarization': results.get('diarization', {}),
+        'inappropriate_language': {
+            'detected_inappropriate_words': inappropriate_lang.get('detected_inappropriate_words', 0),
+            'words_by_severity': inappropriate_lang.get('words_by_severity', {}),
+            'inappropriate_words': inappropriate_words_list
+        } if inappropriate_lang else None
+    }
+
+
 @app.route('/upload', methods=['POST'])
 @rate_limit(config.security.rate_limit_upload)
 @require_role('analyst')
@@ -415,77 +505,8 @@ def upload_file():
                     del progress_tracking[filename]
             threading.Thread(target=cleanup_progress, daemon=True).start()
 
-            # Return results including inappropriate language
-            inappropriate_lang = results.get('inappropriate_language', {})
-            inappropriate_words_list = []
-            if inappropriate_lang.get('words_by_severity'):
-                for severity, words in inappropriate_lang['words_by_severity'].items():
-                    inappropriate_words_list.extend(words)
-            
-            # Include audio clips from the report
-            audio_clips = results.get('report', {}).get('audio_clips', [])
+            return jsonify(_build_analysis_payload(results, filename))
 
-            # Collect all incidents with timing for waveform overlays
-            all_incidents = []
-            for e in results.get('concerning_emotions', []):
-                all_incidents.append({
-                    'type': 'emotion',
-                    'start_time': e.get('start_time', 0),
-                    'end_time': e.get('end_time', 0),
-                    'severity': e.get('severity', 'low'),
-                    'label': e.get('detected_emotion', ''),
-                    'confidence': e.get('confidence', 0),
-                    'ml_backed': e.get('ml_backed', False),
-                })
-            for v in results.get('violence_segments', []):
-                all_incidents.append({
-                    'type': 'violence',
-                    'start_time': v.get('start_time', 0),
-                    'end_time': v.get('end_time', 0),
-                    'severity': v.get('adjusted_severity', 'low'),
-                    'label': ', '.join(v.get('violence_types', [])),
-                    'confidence': v.get('confidence', 0),
-                })
-            for c in results.get('cry_with_responses', []):
-                all_incidents.append({
-                    'type': 'cry',
-                    'start_time': c.get('start_time', 0),
-                    'end_time': c.get('end_time', 0),
-                    'severity': c.get('intensity', 'medium'),
-                    'label': 'response' if c.get('response_detected') else 'no_response',
-                })
-            neglect_a = results.get('neglect_analysis', {})
-            for n in neglect_a.get('unanswered_cries', []):
-                all_incidents.append({
-                    'type': 'neglect',
-                    'start_time': n.get('cry_start_time', 0),
-                    'end_time': n.get('cry_end_time', 0),
-                    'severity': n.get('neglect_severity', 'medium'),
-                    'label': 'unanswered_cry',
-                })
-
-            return jsonify({
-                'success': True,
-                'message': 'Analysis completed successfully',
-                'filename': filename,
-                'results': {
-                    'summary': results['report']['summary'],
-                    'statistics': results['report']['statistics'],
-                    'detailed_findings': results['report'].get('detailed_findings', {}),
-                    'metadata': results['report'].get('metadata', {}),
-                },
-                'incidents': all_incidents,
-                'duration': results.get('duration', 0),
-                'models_used': results.get('models_used', []),
-                'audio_clips': audio_clips,
-                'diarization': results.get('diarization', {}),
-                'inappropriate_language': {
-                    'detected_inappropriate_words': inappropriate_lang.get('detected_inappropriate_words', 0),
-                    'words_by_severity': inappropriate_lang.get('words_by_severity', {}),
-                    'inappropriate_words': inappropriate_words_list
-                } if inappropriate_lang else None
-            })
-        
         else:
             return jsonify({'error': 'File type not supported'}), 400
     
@@ -525,18 +546,23 @@ def list_reports():
     try:
         reports = []
         
-        # List JSON reports
+        # List JSON reports (skip any file that is truncated or malformed so one
+        # bad report cannot blank the whole history sidebar)
         for filename in os.listdir(REPORTS_FOLDER):
-            if filename.endswith('.json'):
-                filepath = os.path.join(REPORTS_FOLDER, filename)
+            if not (filename.startswith('report_') and filename.endswith('.json')):
+                continue
+            filepath = os.path.join(REPORTS_FOLDER, filename)
+            try:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     report_data = json.load(f)
-                    reports.append({
-                        'filename': filename,
-                        'date': report_data['metadata']['analysis_timestamp'],
-                        'original_file': report_data['metadata']['file_name'],
-                        'summary': report_data['summary']
-                    })
+                reports.append({
+                    'filename': filename,
+                    'date': report_data['metadata']['analysis_timestamp'],
+                    'original_file': report_data['metadata']['file_name'],
+                    'summary': report_data.get('summary', {})
+                })
+            except (ValueError, KeyError, OSError) as e:
+                safe_print(f"Skipping unreadable report {filename}: {e}")
         
         # Sort by date (newest first)
         reports.sort(key=lambda x: x['date'], reverse=True)
@@ -699,14 +725,23 @@ def progress_stream(filename):
         sse_queues[filename].append(q)
 
         try:
-            # Send current state immediately
+            # Send current state immediately (and stop if the job already ended)
             if filename in progress_tracking:
-                data = json.dumps(progress_tracking[filename])
+                current = progress_tracking[filename]
+                data = json.dumps(current)
+                if current.get('status') == 'completed':
+                    yield f"event: complete\ndata: {data}\n\n"
+                    return
+                if current.get('status') == 'error':
+                    yield f"event: error\ndata: {data}\n\n"
+                    return
                 yield f"event: progress\ndata: {data}\n\n"
 
+            idle_ticks = 0
             while True:
                 try:
                     event_data = q.get(timeout=30)
+                    idle_ticks = 0
                     data = json.dumps(event_data)
 
                     if event_data.get('status') == 'completed':
@@ -718,6 +753,9 @@ def progress_stream(filename):
                     else:
                         yield f"event: progress\ndata: {data}\n\n"
                 except queue.Empty:
+                    idle_ticks += 1
+                    if idle_ticks > 240:   # ~2 h without progress: give up
+                        break
                     # Send keepalive
                     yield f": keepalive\n\n"
         finally:
@@ -994,20 +1032,9 @@ def job_status(job_id):
 
     job = job_results[job_id]
     if job['status'] == 'completed':
-        results = job.get('results', {})
-        inappropriate_lang = results.get('inappropriate_language', {})
-        return jsonify({
-            'status': 'completed',
-            'results': {
-                'summary': results.get('report', {}).get('summary', {}),
-                'statistics': results.get('report', {}).get('statistics', {}),
-                'detailed_findings': results.get('report', {}).get('detailed_findings', {}),
-            },
-            'filename': job_id,
-            'inappropriate_language': {
-                'detected_inappropriate_words': inappropriate_lang.get('detected_inappropriate_words', 0),
-            } if inappropriate_lang else None
-        })
+        payload = _build_analysis_payload(job.get('results', {}), job_id)
+        payload['status'] = 'completed'
+        return jsonify(payload)
     elif job['status'] == 'error':
         return jsonify({'status': 'error', 'error': job.get('error', 'Unknown error')})
     else:

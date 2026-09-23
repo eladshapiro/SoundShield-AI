@@ -2,6 +2,34 @@
 
 All notable changes to SoundShield-AI are documented here.
 
+## [Unreleased]
+
+### Changed — dashboard redesign (2026-09-23)
+- Web dashboard rebuilt as a single front end (`templates/index.html`,
+  `static/css/main.css`, `static/js/app.js`): Apple-style design system with its
+  own tokens (no Tailwind), Alpine stores, a wavesurfer recording strip with
+  severity-coloured incident markers, findings list, Whisper transcript, neural
+  voice-signal meters, dark mode, Hebrew RTL and a phone layout. The
+  `upload/waveform/charts/modal.js` modules that collided with the inline
+  template code (duplicate `const translations` → SyntaxError, dead Analyze
+  button) are removed; the Chart.js charts are replaced by the verdict meter and
+  signal bars.
+- Upload flow uses `/upload-async` with SSE progress and a `/job-status`
+  backstop, client-side validation and a working Cancel; saved reports reopen
+  from the sidebar into the same view.
+
+### Fixed
+- `/upload` and `/job-status` return the same full payload
+  (`_build_analysis_payload`): incidents with numeric times, audio clips,
+  metadata and recommendations.
+- `/reports` skips truncated report files instead of failing with 500.
+- `/progress-stream` ends immediately for jobs that already finished.
+- Report JSON is written atomically with a numpy-safe encoder.
+- Summary `total_incidents` counts unanswered cries and ignored distress from
+  `neglect_analysis`; `critical_incidents` includes critical inappropriate words.
+- `analyze_with_whisper` was gated on a model attribute that faster-whisper only
+  sets lazily, so the report's transcript section was empty on the first analysis.
+
 ## [3.0.0] - 2026-09-09
 
 ### Changed — ML-first detection, validated on real audio

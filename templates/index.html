@@ -1,701 +1,476 @@
 <!DOCTYPE html>
-<html x-data="appState()" :lang="lang" :dir="dir" :class="{ 'dark': darkMode }">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title x-text="t('pageTitle')">SoundShield-AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <title>SoundShield</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23007AFF'/%3E%3Cpath d='M16 6l8 3v7c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V9l8-3z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M11 16h2l1.5-4 2 8 2-6 1.5 2H21' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+    <script>
+    /* Apply saved theme + language before first paint (no flash). */
+    (function () {
+        try {
+            var d = localStorage.getItem('ss-dark-mode');
+            var dark = d === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : d === 'true';
+            if (dark) document.documentElement.classList.add('dark');
+            var l = localStorage.getItem('ss-lang');
+            if (l === 'he' || l === 'en') {
+                document.documentElement.lang = l;
+                document.documentElement.dir = l === 'he' ? 'rtl' : 'ltr';
+            }
+        } catch (e) { /* storage unavailable */ }
+    })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: { sans: ['Inter', 'sans-serif'] },
-          colors: {
-            primary: { 50: '#EFF6FF', 100: '#DBEAFE', 200: '#BFDBFE', 300: '#93C5FD', 400: '#60A5FA', 500: '#3B82F6', 600: '#2563EB', 700: '#1D4ED8', 800: '#1E40AF', 900: '#1E3A8A' },
-            severity: { low: '#22C55E', medium: '#EAB308', high: '#F97316', critical: '#EF4444' }
-          }
-        }
-      }
-    }
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/wavesurfer.js@7"></script>
     <link rel="stylesheet" href="/static/css/main.css">
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+    <script src="/static/js/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-[#F8FAFC] dark:bg-[#0F172A] font-sans text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
+<body x-data>
 
-    <!-- Skip to content -->
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-md" x-text="t('skipToContent')">
-        Skip to main content
-    </a>
+    <a href="#main" class="skip-link" x-text="$t('skipToContent')">Skip to content</a>
 
-    <!-- ===== TOP NAVIGATION BAR ===== -->
-    <nav class="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
-        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <!-- Logo / Title -->
-                <div class="flex items-center gap-3">
-                    <div class="flex-shrink-0 w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
-                        <!-- Shield icon -->
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="text-lg font-bold text-gray-900 dark:text-white">SoundShield-AI</h1>
-                        <p class="text-xs text-gray-500 dark:text-gray-400" x-text="t('subtitle')"></p>
-                    </div>
-                </div>
+    <!-- SVG symbol library -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <defs>
+            <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5v5.5c0 4.5-3 8-7 9.5-4-1.5-7-5-7-9.5V5.5L12 3z"/><path d="M8.5 12h1.5l1-3 1.5 6 1.5-4.5 1 1.5h1.5"/></symbol>
+            <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></symbol>
+            <symbol id="i-wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M21 12h1"/></symbol>
+            <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 001.5.87l11-6.5a1 1 0 000-1.74l-11-6.5A1 1 0 008 5.5z"/></symbol>
+            <symbol id="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></symbol>
+            <symbol id="i-prev" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM19 6.3v11.4a1 1 0 01-1.55.83L9 12.83a1 1 0 010-1.66l8.45-5.7A1 1 0 0119 6.3z"/></symbol>
+            <symbol id="i-next" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM5 6.3v11.4a1 1 0 001.55.83l8.45-5.7a1 1 0 000-1.66L6.55 5.47A1 1 0 005 6.3z"/></symbol>
+            <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+            <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+            <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.5"/></symbol>
+            <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+            <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></symbol>
+            <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></symbol>
+            <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 00-14.5-4.5L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0014.5 4.5L20 16"/><path d="M20 21v-5h-5"/></symbol>
+            <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></symbol>
+            <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2"/></symbol>
+            <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+            <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></symbol>
+            <symbol id="i-ear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0112 0c0 3-2 4-2 6.5A3.5 3.5 0 0112.5 20"/><path d="M9.5 10a2.5 2.5 0 015 0c0 1.5-1.5 2-1.5 3.5"/></symbol>
+            <symbol id="i-voice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></symbol>
+            <symbol id="i-drop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z"/></symbol>
+            <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+            <symbol id="i-bubble" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2h-7l-5 4v-4H6a2 2 0 01-2-2V6z"/><path d="M8 9h8M8 12h5"/></symbol>
+            <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/></symbol>
+            <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z"/></symbol>
+        </defs>
+    </svg>
 
-                <!-- Right controls -->
-                <div class="flex items-center gap-2">
-                    <!-- User info (auth) -->
-                    <template x-if="isLoggedIn">
-                        <div class="hidden sm:flex items-center gap-2 mr-2">
-                            <span class="text-sm text-gray-600 dark:text-gray-400" x-text="currentUser?.username"></span>
-                            <span class="px-2 py-0.5 text-xs font-medium rounded-full"
-                                  :class="{
-                                      'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400': userRole === 'admin',
-                                      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400': userRole === 'analyst',
-                                      'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400': userRole === 'viewer'
-                                  }"
-                                  x-text="t('role' + userRole.charAt(0).toUpperCase() + userRole.slice(1))">
-                            </span>
-                            <button @click="logout()"
-                                    class="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                    :title="t('logoutBtn')">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </template>
-                    <template x-if="!isLoggedIn">
-                        <a href="/login" class="hidden sm:flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium mr-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                            </svg>
-                            <span x-text="t('loginBtn')">Sign In</span>
-                        </a>
-                    </template>
-
-                    <!-- Sidebar toggle (mobile) -->
-                    <button
-                        @click="sidebarOpen = !sidebarOpen"
-                        class="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        :aria-label="t('toggleSidebar')"
-                    >
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                        </svg>
-                    </button>
-
-                    <!-- Admin dashboard link -->
-                    <a
-                        href="/admin"
-                        class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        :aria-label="lang === 'en' ? 'Admin Dashboard' : 'לוח בקרה'"
-                        title="Admin"
-                    >
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                    </a>
-
-                    <!-- Language toggle -->
-                    <button
-                        x-on:click="toggleLang()"
-                        class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        :aria-label="t('toggleLanguage')"
-                    >
-                        <svg class="w-4 h-4 me-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
-                        </svg>
-                        <span x-text="lang === 'en' ? 'HE' : 'EN'"></span>
-                    </button>
-
-                    <!-- Dark mode toggle -->
-                    <button
-                        x-on:click="darkMode = !darkMode"
-                        class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        :aria-label="t('toggleDarkMode')"
-                    >
-                        <!-- Sun icon (shown in dark mode) -->
-                        <svg x-show="darkMode" class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
-                        </svg>
-                        <!-- Moon icon (shown in light mode) -->
-                        <svg x-show="!darkMode" class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clip-rule="evenodd"/>
-                        </svg>
-                    </button>
-                </div>
+    <!-- ===== Toolbar ===== -->
+    <header class="toolbar">
+        <div class="brand">
+            <div class="brand__mark"><svg><use href="#i-shield"/></svg></div>
+            <div>
+                <div class="brand__name">SoundShield</div>
+                <div class="brand__sub" x-text="$t('tagline')"></div>
             </div>
         </div>
-    </nav>
+        <div class="toolbar__spacer"></div>
+        <div class="toolbar__status" x-show="$store.health.checked" x-cloak>
+            <span class="dot" :class="{ 'is-off': !$store.health.online }"></span>
+            <span x-text="$store.health.online ? $t('serverReady') : $t('serverOffline')"></span>
+        </div>
+        <div class="seg" role="group" :aria-label="$t('uiLanguage')">
+            <button class="seg__btn" :class="{ 'is-on': $store.ui.lang === 'he' }" @click="$store.ui.setLang('he')" lang="he">עברית</button>
+            <button class="seg__btn" :class="{ 'is-on': $store.ui.lang === 'en' }" @click="$store.ui.setLang('en')" lang="en">English</button>
+        </div>
+        <button class="icon-btn" @click="$store.ui.toggleDark()" :aria-label="$t('appearance')" :title="$t('appearance')">
+            <svg x-show="!$store.ui.dark"><use href="#i-moon"/></svg>
+            <svg x-show="$store.ui.dark" x-cloak><use href="#i-sun"/></svg>
+        </button>
+        <a class="icon-btn" href="/admin" :aria-label="$t('admin')" :title="$t('admin')"><svg><use href="#i-gear"/></svg></a>
+    </header>
 
-    <!-- ===== MAIN LAYOUT ===== -->
-    <div class="max-w-screen-2xl mx-auto flex flex-col lg:flex-row min-h-[calc(100vh-4rem)]">
+    <div class="layout">
 
-        <!-- ===== LEFT SIDEBAR ===== -->
-        <!-- Mobile backdrop -->
-        <div
-            x-show="sidebarOpen"
-            x-transition:enter="transition-opacity ease-linear duration-300"
-            x-transition:enter-start="opacity-0"
-            x-transition:enter-end="opacity-100"
-            x-transition:leave="transition-opacity ease-linear duration-300"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0"
-            class="fixed inset-0 z-30 bg-black/50 lg:hidden"
-            @click="sidebarOpen = false"
-        ></div>
-
-        <aside
-            :class="sidebarOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'"
-            class="fixed bottom-0 left-0 right-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-2xl lg:rounded-none
-                   lg:static lg:max-h-none lg:z-auto lg:w-80 lg:flex-shrink-0
-                   bg-white dark:bg-gray-900 border-t lg:border-t-0 lg:border-e border-gray-200 dark:border-gray-700
-                   transform transition-transform duration-300 ease-in-out"
-        >
-            <div class="p-4 lg:p-6 space-y-6 lg:sticky lg:top-16 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
-
-                <!-- Mobile drag handle -->
-                <div class="flex justify-center lg:hidden">
-                    <div class="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
-                </div>
-
-                <!-- Upload Zone -->
-                <div x-data="uploadManager()">
-                    <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3" x-text="t('uploadTitle')"></h2>
-
-                    <div
-                        class="relative border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 cursor-pointer"
-                        :class="dragOver
-                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                            : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 hover:bg-gray-50 dark:hover:bg-gray-800'"
-                        @click="$refs.fileInput.click()"
-                        @dragover.prevent="dragOver = true"
-                        @dragleave.prevent="dragOver = false"
-                        @drop.prevent="handleDrop($event)"
-                        :aria-label="t('uploadDropzone')"
-                    >
-                        <input
-                            type="file"
-                            x-ref="fileInput"
-                            class="hidden"
-                            accept=".wav,.mp3,.m4a,.flac,.aac,.ogg"
-                            @change="handleFileSelect($event)"
-                        >
-
-                        <!-- Upload icon -->
-                        <div class="mx-auto w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-3">
-                            <svg class="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                            </svg>
+        <!-- ===== Sidebar ===== -->
+        <aside class="sidebar">
+            <section>
+                <div class="section-title"><span x-text="$t('newAnalysis')"></span></div>
+                <div class="card">
+                    <div class="card__bd" style="display:flex; flex-direction:column; gap:12px">
+                        <div class="dropzone"
+                             :class="{ 'is-over': $store.upload.isOver, 'is-reject': !!$store.upload.error }"
+                             role="button" tabindex="0"
+                             :aria-label="$t('dropTitle')"
+                             @click="$refs.fileInput.click()"
+                             @keydown.enter.prevent="$refs.fileInput.click()"
+                             @keydown.space.prevent="$refs.fileInput.click()"
+                             @dragover.prevent="$store.upload.isOver = true"
+                             @dragleave.prevent="$store.upload.isOver = false"
+                             @drop.prevent="$store.upload.drop($event)">
+                            <input type="file" x-ref="fileInput" class="sr-only" tabindex="-1"
+                                   accept=".wav,.mp3,.m4a,.flac,.aac,.ogg,audio/*"
+                                   @change="$store.upload.pick($event.target.files[0]); $event.target.value = ''">
+                            <div class="dropzone__icon"><svg><use href="#i-upload"/></svg></div>
+                            <div class="dropzone__title" x-text="$t('dropTitle')"></div>
+                            <div class="dropzone__sub" x-text="$t('dropSubShort')"></div>
                         </div>
 
-                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300" x-text="t('uploadDragDrop')"></p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">WAV, MP3, M4A, FLAC, AAC, OGG</p>
-
-                        <!-- Selected file display -->
-                        <template x-if="selectedFile">
-                            <div class="mt-3 p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg text-sm" @click.stop>
-                                <div class="flex items-center gap-2 text-primary-700 dark:text-primary-300">
-                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
-                                    </svg>
-                                    <span class="truncate" x-text="selectedFile.name"></span>
+                        <template x-if="$store.upload.file">
+                            <div class="file-pill">
+                                <div class="file-pill__icon"><svg><use href="#i-wave"/></svg></div>
+                                <div style="min-width:0; flex:1">
+                                    <div class="file-pill__name" x-text="$store.upload.file.name" dir="auto"></div>
+                                    <div class="file-pill__meta" x-text="$store.upload.fileMeta()"></div>
                                 </div>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="formatFileSize(selectedFile.size)"></p>
+                                <button class="icon-btn" @click="$store.upload.clear()" :aria-label="$t('remove')" x-show="!$store.upload.busy"><svg><use href="#i-x"/></svg></button>
                             </div>
                         </template>
-                    </div>
 
-                    <!-- Analysis language selector -->
-                    <div class="mt-3">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1" x-text="t('analysisLanguage')"></label>
-                        <select
-                            x-model="analysisLang"
-                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none min-h-[44px]"
-                            :aria-label="t('analysisLanguage')"
-                        >
-                            <option value="he">Hebrew</option>
-                            <option value="en">English</option>
-                        </select>
-                    </div>
+                        <template x-if="$store.upload.error"><div class="form-msg form-msg--error" role="alert" x-text="$store.upload.error"></div></template>
+                        <template x-if="$store.upload.warning && !$store.upload.error"><div class="form-msg form-msg--warn" x-text="$store.upload.warning"></div></template>
 
-                    <!-- Upload / Cancel buttons -->
-                    <div class="mt-3 flex gap-2">
-                        <button
-                            @click="uploadFile()"
-                            :disabled="!selectedFile || uploading"
-                            class="flex-1 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 px-4 rounded-lg transition-colors min-h-[44px] flex items-center justify-center gap-2"
-                            :aria-label="t('uploadButton')"
-                        >
-                            <svg x-show="!uploading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                            </svg>
-                            <svg x-show="uploading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span x-text="uploading ? t('analyzing') : t('uploadButton')"></span>
-                        </button>
-                        <button
-                            x-show="selectedFile && !uploading"
-                            @click="clearFile()"
-                            class="px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm transition-colors min-h-[44px]"
-                            :aria-label="t('cancelButton')"
-                        >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+                        <div class="field">
+                            <div class="field__label" x-text="$t('recordingLanguage')"></div>
+                            <div class="seg seg--block" role="group">
+                                <button class="seg__btn" :class="{ 'is-on': $store.upload.recordingLang === 'he' }" @click="$store.upload.recordingLang = 'he'" x-text="$t('hebrew')"></button>
+                                <button class="seg__btn" :class="{ 'is-on': $store.upload.recordingLang === 'en' }" @click="$store.upload.recordingLang = 'en'" x-text="$t('english')"></button>
+                            </div>
+                        </div>
 
-                <!-- Divider -->
-                <hr class="border-gray-200 dark:border-gray-700">
-
-                <!-- Analysis History -->
-                <div x-data="{ historyLoaded: false }" x-init="$nextTick(() => { loadHistory(); historyLoaded = true })">
-                    <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center justify-between">
-                        <span x-text="t('historyTitle')"></span>
-                        <button
-                            @click="loadHistory()"
-                            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
-                            :aria-label="t('refreshHistory')"
-                        >
-                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
-                        </button>
-                    </h2>
-
-                    <div class="space-y-2 max-h-[40vh] lg:max-h-[50vh] overflow-y-auto" id="historyList">
-                        <!-- Empty history message -->
-                        <template x-if="history.length === 0">
-                            <p class="text-sm text-gray-400 dark:text-gray-500 text-center py-4" x-text="t('noHistory')"></p>
-                        </template>
-
-                        <!-- History items -->
-                        <template x-for="(report, idx) in history" :key="report.filename">
-                            <button
-                                @click="viewReport(report.filename); sidebarOpen = false"
-                                class="w-full text-start p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group min-h-[44px]"
-                                :aria-label="t('viewReport') + ': ' + report.original_file"
-                            >
-                                <div class="flex items-start justify-between gap-2">
-                                    <div class="min-w-0 flex-1">
-                                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" x-text="report.original_file"></p>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="formatDate(report.date)"></p>
-                                    </div>
-                                    <span
-                                        class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full"
-                                        :class="severityBadgeClass(report.summary?.risk_level)"
-                                        x-text="report.summary?.risk_level || '---'"
-                                    ></span>
+                        <!-- Inline progress while busy -->
+                        <template x-if="$store.upload.busy">
+                            <div>
+                                <div class="small muted" style="display:flex; justify-content:space-between; gap:8px">
+                                    <span x-text="$store.upload.phaseLabel()"></span>
+                                    <span class="num" x-text="$store.upload.percentLabel()"></span>
                                 </div>
+                                <div class="progress__bar" style="margin-bottom:10px">
+                                    <div class="progress__fill" :class="{ 'is-indeterminate': $store.upload.indeterminate() }" :style="'width:' + $store.upload.percent() + '%'"></div>
+                                </div>
+                                <button class="btn btn--secondary btn--block" @click="$store.upload.cancel()" x-text="$t('cancel')"></button>
+                            </div>
+                        </template>
+                        <template x-if="!$store.upload.busy">
+                            <button class="btn btn--primary btn--block" :disabled="!$store.upload.file || !!$store.upload.error" @click="$store.upload.start()">
+                                <svg><use href="#i-ear"/></svg>
+                                <span x-text="$t('analyze')"></span>
                             </button>
                         </template>
                     </div>
                 </div>
-            </div>
+            </section>
+
+            <section class="sidebar__recent">
+                <div class="section-title">
+                    <span x-text="$t('recent')"></span>
+                    <button class="icon-btn" @click="$store.history.load()" :aria-label="$t('refresh')" :title="$t('refresh')"><svg><use href="#i-refresh"/></svg></button>
+                </div>
+                <div class="card list">
+                    <template x-if="!$store.history.items.length">
+                        <div class="list__empty" x-text="$store.history.loading ? '…' : $t('noRecent')"></div>
+                    </template>
+                    <template x-for="item in $store.history.items" :key="item.filename">
+                        <button class="list__row list__row--btn" :class="{ 'is-on': $store.analysis.reportFilename === item.filename }" @click="$store.analysis.openReport(item.filename)">
+                            <span class="sev-dot" :class="'sev-dot--' + $store.analysis.riskClass(item.summary && item.summary.risk_level)"></span>
+                            <span class="list__main">
+                                <span class="list__title" x-text="$store.analysis.displayName(item.original_file)" dir="auto"></span>
+                                <span class="list__sub" x-text="$store.ui.fmtDate(item.date)"></span>
+                            </span>
+                            <span class="chip" x-text="(item.summary && item.summary.total_incidents) || 0"></span>
+                        </button>
+                    </template>
+                </div>
+            </section>
         </aside>
 
-        <!-- ===== MAIN CONTENT AREA ===== -->
-        <main id="main-content" class="flex-1 overflow-y-auto">
-            <div class="p-4 sm:p-6 lg:p-8 space-y-6">
+        <!-- ===== Main ===== -->
+        <main id="main" class="main">
+            <div class="main__inner">
 
-                <!-- ===== EMPTY STATE (no analysis loaded) ===== -->
-                <template x-if="!currentResults && !analyzing">
-                    <div class="flex flex-col items-center justify-center py-16 lg:py-24">
-                        <div class="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-2xl flex items-center justify-center mb-6">
-                            <svg class="w-10 h-10 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-                            </svg>
+                <!-- Empty state -->
+                <template x-if="!$store.analysis.view && !$store.upload.busy && !$store.upload.failed && !$store.analysis.loading">
+                    <section class="empty">
+                        <div>
+                            <h1 class="empty__title" x-text="$t('emptyTitle')"></h1>
+                            <p class="empty__lead" style="margin-top:10px" x-text="$t('emptyLead')"></p>
                         </div>
-                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" x-text="t('emptyTitle')"></h2>
-                        <p class="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8" x-text="t('emptyMessage')"></p>
-
-                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 max-w-lg w-full">
-                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4" x-text="t('gettingStarted')"></h3>
-                            <ol class="space-y-3">
-                                <li class="flex items-start gap-3">
-                                    <span class="flex-shrink-0 w-6 h-6 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                                    <span class="text-sm text-gray-600 dark:text-gray-400" x-text="t('step1Desc')"></span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="flex-shrink-0 w-6 h-6 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                                    <span class="text-sm text-gray-600 dark:text-gray-400" x-text="t('step2Desc')"></span>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <span class="flex-shrink-0 w-6 h-6 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                                    <span class="text-sm text-gray-600 dark:text-gray-400" x-text="t('step3Desc')"></span>
-                                </li>
-                            </ol>
+                        <div class="dropzone dropzone--hero"
+                             :class="{ 'is-over': $store.upload.isOver, 'is-reject': !!$store.upload.error }"
+                             role="button" tabindex="0"
+                             @click="$refs.heroInput.click()"
+                             @keydown.enter.prevent="$refs.heroInput.click()"
+                             @dragover.prevent="$store.upload.isOver = true"
+                             @dragleave.prevent="$store.upload.isOver = false"
+                             @drop.prevent="$store.upload.drop($event)">
+                            <input type="file" x-ref="heroInput" class="sr-only" tabindex="-1" accept=".wav,.mp3,.m4a,.flac,.aac,.ogg,audio/*"
+                                   @change="$store.upload.pick($event.target.files[0]); $event.target.value = ''">
+                            <div class="dropzone__icon"><svg><use href="#i-upload"/></svg></div>
+                            <div class="dropzone__title" x-text="$store.upload.file ? $store.upload.file.name : $t('dropTitle')" dir="auto"></div>
+                            <div class="dropzone__sub" x-text="$store.upload.file ? $store.upload.fileMeta() : $t('dropSub')"></div>
                         </div>
-                    </div>
+                        <template x-if="$store.upload.error"><div class="form-msg form-msg--error" role="alert" x-text="$store.upload.error"></div></template>
+                        <div class="empty__row">
+                            <div class="seg" role="group" :aria-label="$t('recordingLanguage')">
+                                <button class="seg__btn" :class="{ 'is-on': $store.upload.recordingLang === 'he' }" @click="$store.upload.recordingLang = 'he'" x-text="$t('hebrew')"></button>
+                                <button class="seg__btn" :class="{ 'is-on': $store.upload.recordingLang === 'en' }" @click="$store.upload.recordingLang = 'en'" x-text="$t('english')"></button>
+                            </div>
+                            <button class="btn btn--primary btn--lg" :disabled="!$store.upload.file || !!$store.upload.error" @click="$store.upload.start()">
+                                <svg><use href="#i-ear"/></svg><span x-text="$t('analyze')"></span>
+                            </button>
+                        </div>
+                        <div class="empty__hint">
+                            <div class="hint"><svg><use href="#i-lock"/></svg><div><b x-text="$t('hint1t')"></b><span x-text="$t('hint1')"></span></div></div>
+                            <div class="hint"><svg><use href="#i-globe"/></svg><div><b x-text="$t('hint2t')"></b><span x-text="$t('hint2')"></span></div></div>
+                            <div class="hint"><svg><use href="#i-ear"/></svg><div><b x-text="$t('hint3t')"></b><span x-text="$t('hint3')"></span></div></div>
+                        </div>
+                    </section>
                 </template>
 
-                <!-- ===== RESULTS SECTION (shown when analysis results exist) ===== -->
-                <template x-if="currentResults && !analyzing">
-                    <div class="space-y-6">
-
-                        <!-- Summary Metric Cards -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                            <!-- Risk Level -->
-                            <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400" x-text="t('riskLevel')"></span>
-                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                                    </svg>
+                <!-- Progress (only when nothing else is on screen) -->
+                <template x-if="$store.upload.busy && !$store.analysis.view">
+                    <section class="card progress">
+                        <div class="card__bd">
+                            <div class="progress__file">
+                                <div class="file-pill__icon"><svg><use href="#i-wave"/></svg></div>
+                                <div style="min-width:0">
+                                    <div class="file-pill__name" style="font-size:16px" x-text="$store.upload.file && $store.upload.file.name" dir="auto"></div>
+                                    <div class="file-pill__meta" x-text="$store.upload.phaseLabel()"></div>
                                 </div>
-                                <span
-                                    class="inline-block text-lg font-bold px-3 py-1 rounded-full"
-                                    :class="severityBadgeClass(currentResults.summary?.risk_level)"
-                                    x-text="currentResults.summary?.risk_level || '---'"
-                                ></span>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 line-clamp-2" x-text="currentResults.summary?.overall_assessment"></p>
                             </div>
-
-                            <!-- Total Incidents -->
-                            <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400" x-text="t('totalIncidents')"></span>
-                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                                    </svg>
-                                </div>
-                                <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="currentResults.summary?.total_incidents ?? 0"></p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2" x-text="t('detectedEvents')"></p>
-                            </div>
-
-                            <!-- Critical Incidents -->
-                            <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400" x-text="t('criticalIncidents')"></span>
-                                    <svg class="w-5 h-5 text-severity-critical" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                </div>
-                                <p class="text-3xl font-bold" :class="(currentResults.summary?.critical_incidents ?? 0) > 0 ? 'text-severity-critical' : 'text-gray-900 dark:text-white'" x-text="currentResults.summary?.critical_incidents ?? 0"></p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2" x-text="t('requireAttention')"></p>
-                            </div>
-
-                            <!-- Recording Duration -->
-                            <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400" x-text="t('recordingDuration')"></span>
-                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                </div>
-                                <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="formatDuration(currentResults.statistics?.audio_duration_minutes)"></p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2" x-text="t('minutes')"></p>
+                            <div class="progress__bar"><div class="progress__fill" :class="{ 'is-indeterminate': $store.upload.indeterminate() }" :style="'width:' + $store.upload.percent() + '%'"></div></div>
+                            <div class="steps">
+                                <template x-for="n in 7" :key="n">
+                                    <div class="step" :class="{ 'is-done': $store.upload.step > n, 'is-active': $store.upload.step === n && $store.upload.phase === 'analyzing' }">
+                                        <span class="step__mark"><svg x-show="$store.upload.step > n"><use href="#i-check"/></svg><span x-show="$store.upload.step <= n && !($store.upload.step === n && $store.upload.phase === 'analyzing')" x-text="n"></span></span>
+                                        <span x-text="$t('step' + n)"></span>
+                                    </div>
+                                </template>
                             </div>
                         </div>
+                        <div class="card__ft" style="justify-content:flex-end">
+                            <button class="btn btn--secondary" @click="$store.upload.cancel()" x-text="$t('cancel')"></button>
+                        </div>
+                    </section>
+                </template>
 
-                        <!-- Waveform Section -->
-                        <div x-data="waveformManager()" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                            <div class="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
-                                    </svg>
-                                    <span x-text="t('waveformTitle')"></span>
-                                </h3>
+                <!-- Failure -->
+                <template x-if="$store.upload.failed && !$store.analysis.view">
+                    <section class="card progress">
+                        <div class="card__bd" style="display:flex; gap:14px; align-items:flex-start">
+                            <div class="finding__type" style="color:var(--danger); background:var(--danger-soft)"><svg><use href="#i-alert"/></svg></div>
+                            <div style="flex:1">
+                                <div style="font-weight:600" x-text="$t('analysisFailed')"></div>
+                                <div class="muted small" style="margin-top:4px" x-text="$store.upload.failure" dir="auto"></div>
                             </div>
+                        </div>
+                        <div class="card__ft" style="justify-content:flex-end">
+                            <button class="btn btn--secondary" @click="$store.upload.reset()" x-text="$t('dismiss')"></button>
+                            <button class="btn btn--primary" @click="$store.upload.start()" :disabled="!$store.upload.file" x-text="$t('tryAgain')"></button>
+                        </div>
+                    </section>
+                </template>
 
-                            <!-- Waveform container -->
-                            <div class="px-4 sm:px-5 py-4">
-                                <div id="waveform-container" class="w-full min-h-[128px] bg-gray-50 dark:bg-gray-900 rounded-lg"></div>
+                <!-- Loading a past report -->
+                <template x-if="$store.analysis.loading && !$store.analysis.view">
+                    <section class="card progress"><div class="card__bd muted" x-text="$t('loadingReport') + '…'"></div></section>
+                </template>
+
+                <!-- ===== Results ===== -->
+                <template x-if="$store.analysis.view">
+                    <div style="display:flex; flex-direction:column; gap:20px" x-data="{ v: $store.analysis.view }" x-effect="v = $store.analysis.view">
+
+                        <section class="result-hd">
+                            <div style="min-width:0">
+                                <h1 class="result-hd__title" x-text="v.name" dir="auto"></h1>
+                                <div class="result-hd__meta">
+                                    <span class="num" x-text="$store.ui.fmtDuration(v.duration)"></span>
+                                    <span class="sep"></span>
+                                    <span x-text="v.language === 'he' ? $t('hebrew') : (v.language === 'en' ? $t('english') : '')" x-show="v.language"></span>
+                                    <span class="sep" x-show="v.language"></span>
+                                    <span x-text="$t('analyzedOn') + ' ' + $store.ui.fmtDate(v.analyzedAt)"></span>
+                                    <template x-if="v.models.length">
+                                        <span style="display:inline-flex; gap:4px; flex-wrap:wrap">
+                                            <span class="sep"></span>
+                                            <template x-for="m in v.models" :key="m"><span class="chip" x-text="m"></span></template>
+                                        </span>
+                                    </template>
+                                </div>
                             </div>
+                            <template x-if="$store.analysis.reportFilename">
+                                <div class="result-hd__actions">
+                                    <a class="btn btn--secondary btn--sm" download target="_blank" rel="noopener" :href="'/download/' + $store.analysis.reportFilename"><svg><use href="#i-download"/></svg>JSON</a>
+                                    <a class="btn btn--secondary btn--sm" download target="_blank" rel="noopener" :href="'/download/' + $store.analysis.reportFilename.replace('.json', '.html')"><svg><use href="#i-download"/></svg>HTML</a>
+                                    <a class="btn btn--secondary btn--sm" download target="_blank" rel="noopener" :href="'/download/' + $store.analysis.reportFilename.replace('.json', '.csv')"><svg><use href="#i-download"/></svg>CSV</a>
+                                </div>
+                            </template>
+                        </section>
 
-                            <!-- Controls -->
-                            <div class="px-4 sm:px-5 pb-4 flex items-center gap-3 flex-wrap">
-                                <button
-                                    @click="playPause()"
-                                    class="p-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                                    :aria-label="isPlaying ? t('pause') : t('play')"
-                                >
-                                    <!-- Play icon -->
-                                    <svg x-show="!isPlaying" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path d="M8 5v14l11-7z"/>
-                                    </svg>
-                                    <!-- Pause icon -->
-                                    <svg x-show="isPlaying" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                                    </svg>
+                        <!-- Verdict -->
+                        <section class="card verdict" aria-live="polite">
+                            <div class="verdict__main">
+                                <div class="verdict__level">
+                                    <span class="sev-dot" :class="'sev-dot--' + v.riskClass"></span>
+                                    <span x-text="$t('risk_' + v.riskClass)"></span>
+                                </div>
+                                <p class="verdict__text" x-text="$store.analysis.verdictLine(v)"></p>
+                                <div class="meter" :title="$t('scoreLabel') + ': ' + v.score">
+                                    <div class="meter__track">
+                                        <div class="meter__tick" style="inset-inline-start:12.5%"></div>
+                                        <div class="meter__tick" style="inset-inline-start:37.5%"></div>
+                                        <div class="meter__tick" style="inset-inline-start:75%"></div>
+                                        <div class="meter__fill" :class="'meter__fill--' + v.riskClass" :style="'width:' + v.scorePct + '%'"></div>
+                                    </div>
+                                    <div class="meter__labels">
+                                        <span x-text="$t('zoneNormal')"></span><span x-text="$t('zoneModerate')"></span><span x-text="$t('zoneConcerning')"></span><span x-text="$t('zoneCritical')"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="verdict__side">
+                                <div class="stat"><div class="stat__value" x-text="v.incidents.length"></div><div class="stat__label" x-text="$t('moments')"></div></div>
+                                <div class="stat" :class="{ 'stat--critical': v.summary.critical_incidents > 0 }"><div class="stat__value" x-text="v.summary.critical_incidents || 0"></div><div class="stat__label" x-text="$t('criticalCount')"></div></div>
+                                <div class="stat"><div class="stat__value num" x-text="$store.ui.fmtClock(v.duration)"></div><div class="stat__label" x-text="$t('duration')"></div></div>
+                            </div>
+                        </section>
+
+                        <!-- Recording strip -->
+                        <section class="card strip">
+                            <div class="card__hd">
+                                <div class="card__title"><svg><use href="#i-wave"/></svg><span x-text="$t('recording')"></span></div>
+                                <div class="strip__legend">
+                                    <span><i style="background:var(--sev-low)"></i><span x-text="$t('sev_low')"></span></span>
+                                    <span><i style="background:var(--sev-medium)"></i><span x-text="$t('sev_medium')"></span></span>
+                                    <span><i style="background:var(--sev-high)"></i><span x-text="$t('sev_high')"></span></span>
+                                    <span><i style="background:var(--sev-critical)"></i><span x-text="$t('sev_critical')"></span></span>
+                                </div>
+                            </div>
+                            <div class="strip__body">
+                                <div class="strip__wave" :class="{ 'is-loading': !$store.player.ready && !$store.player.error }">
+                                    <div id="wave" x-init="$store.player.mount($el, v)"></div>
+                                    <div class="strip__marks">
+                                        <template x-for="(inc, i) in v.incidents" :key="i">
+                                            <button class="mark" :class="['mark--' + inc.sev, { 'is-active': $store.player.activeIdx === i }]"
+                                                    :style="'left:' + inc.leftPct + '%; width:' + inc.widthPct + '%'"
+                                                    :title="$store.analysis.incidentTitle(inc) + ' · ' + $store.ui.fmtRange(inc.start, inc.end)"
+                                                    :aria-label="$store.analysis.incidentTitle(inc) + ' ' + $store.ui.fmtRange(inc.start, inc.end)"
+                                                    @click="$store.player.playIncident(i)"></button>
+                                        </template>
+                                    </div>
+                                    <div class="strip__empty" x-show="$store.player.error" x-text="$t('audioMissing')"></div>
+                                </div>
+                                <div class="strip__axis">
+                                    <span>0:00</span>
+                                    <span x-text="$store.ui.fmtClock(v.duration / 2)"></span>
+                                    <span x-text="$store.ui.fmtClock(v.duration)"></span>
+                                </div>
+                            </div>
+                            <div class="strip__ctl">
+                                <button class="btn btn--secondary btn--round" @click="$store.player.prev()" :disabled="!$store.player.ready || !v.incidents.length" :aria-label="$t('prevMoment')" :title="$t('prevMoment')"><svg><use href="#i-prev"/></svg></button>
+                                <button class="btn btn--primary btn--round btn--lg" @click="$store.player.toggle()" :disabled="!$store.player.ready" :aria-label="$store.player.playing ? $t('pause') : $t('play')">
+                                    <svg x-show="!$store.player.playing"><use href="#i-play"/></svg>
+                                    <svg x-show="$store.player.playing" x-cloak><use href="#i-pause"/></svg>
                                 </button>
-                                <button
-                                    @click="stop()"
-                                    class="p-2.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                                    :aria-label="t('stop')"
-                                >
-                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path d="M6 6h12v12H6z"/>
-                                    </svg>
-                                </button>
-                                <span class="text-sm text-gray-600 dark:text-gray-400 font-mono tabular-nums" x-text="currentTime + ' / ' + totalTime"></span>
-
-                                <!-- Legend for incident overlays -->
-                                <div class="ms-auto flex items-center gap-3 flex-wrap text-xs">
-                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-red-500/60 inline-block"></span> <span x-text="t('violence')"></span></span>
-                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-orange-500/60 inline-block"></span> <span x-text="t('emotion')"></span></span>
-                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-blue-500/60 inline-block"></span> <span x-text="t('cry')"></span></span>
-                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-gray-500/60 inline-block"></span> <span x-text="t('neglect')"></span></span>
-                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-purple-500/60 inline-block"></span> <span x-text="t('language')"></span></span>
-                                </div>
+                                <button class="btn btn--secondary btn--round" @click="$store.player.next()" :disabled="!$store.player.ready || !v.incidents.length" :aria-label="$t('nextMoment')" :title="$t('nextMoment')"><svg><use href="#i-next"/></svg></button>
+                                <span class="strip__time" x-text="$store.ui.fmtClock($store.player.time) + ' / ' + $store.ui.fmtClock($store.player.duration || v.duration)"></span>
+                                <span class="small muted" x-show="$store.player.activeIdx !== null" x-text="$store.player.activeIdx !== null ? $store.analysis.incidentTitle(v.incidents[$store.player.activeIdx]) : ''"></span>
                             </div>
+                        </section>
+
+                        <!-- Findings -->
+                        <section class="card">
+                            <div class="card__hd">
+                                <div class="card__title"><svg><use href="#i-alert"/></svg><span x-text="$t('findings')"></span><span class="chip" x-text="v.incidents.length"></span></div>
+                            </div>
+                            <template x-if="!v.incidents.length">
+                                <div class="list__empty" style="padding:28px" x-text="$t('noFindings')"></div>
+                            </template>
+                            <div class="list">
+                                <template x-for="(inc, i) in v.incidents" :key="'f' + i">
+                                    <div class="finding" :class="{ 'is-active': $store.player.activeIdx === i }" :id="'finding-' + i">
+                                        <div class="finding__lead">
+                                            <span class="sev-dot" :class="'sev-dot--' + inc.sev"></span>
+                                            <span class="finding__type"><svg><use :href="'#' + $store.analysis.typeIcon(inc.type)"/></svg></span>
+                                        </div>
+                                        <div style="min-width:0">
+                                            <div class="finding__title">
+                                                <span x-text="$store.analysis.incidentTitle(inc)"></span>
+                                                <span class="finding__time" x-text="$store.ui.fmtRange(inc.start, inc.end)"></span>
+                                            </div>
+                                            <div class="finding__desc" x-show="$store.analysis.showDesc(inc)"><span class="bidi" dir="auto" x-text="inc.description"></span></div>
+                                            <div class="finding__meta">
+                                                <span class="chip" x-text="$t('type_' + inc.type)"></span>
+                                                <span class="chip" x-text="$t('sev_' + inc.sev)"></span>
+                                                <span class="chip" x-show="inc.confidence != null" x-text="Math.round(inc.confidence * 100) + '% ' + $t('confidence')"></span>
+                                                <span class="chip chip--tint" x-show="inc.mlBacked === true"><svg><use href="#i-spark"/></svg><span x-text="$t('mlTag')"></span></span>
+                                            </div>
+                                        </div>
+                                        <div class="finding__actions">
+                                            <a class="btn btn--ghost btn--sm" x-show="inc.clipUrl" :href="inc.clipUrl" download :title="$t('saveClip')">
+                                                <svg><use href="#i-download"/></svg><span x-text="$t('saveClip')"></span>
+                                            </a>
+                                            <button class="btn btn--ghost btn--sm" @click="$store.player.playIncident(i)" :disabled="!$store.player.ready">
+                                                <svg><use href="#i-play"/></svg><span x-text="$t('listen')"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </section>
+
+                        <div class="cols-2">
+                            <!-- Transcript -->
+                            <section class="card">
+                                <div class="card__hd">
+                                    <div class="card__title"><svg><use href="#i-bubble"/></svg><span x-text="$t('transcript')"></span></div>
+                                    <span class="small faint" x-show="v.transcript.model" x-text="v.transcript.model"></span>
+                                </div>
+                                <template x-if="!v.transcript.segments.length">
+                                    <div class="transcript__empty" x-text="v.transcript.error ? $t('transcriptFailed') : $t('transcriptEmpty')" :title="v.transcript.error || ''"></div>
+                                </template>
+                                <div class="transcript" x-show="v.transcript.segments.length">
+                                    <template x-for="(seg, i) in v.transcript.segments" :key="'s' + i">
+                                        <div class="tseg" :class="{ 'is-flag': seg.flagged, 'is-now': $store.player.time >= seg.start && $store.player.time < seg.end }" @click="$store.player.seekPlay(seg.start)" role="button" tabindex="0" @keydown.enter="$store.player.seekPlay(seg.start)">
+                                            <span class="tseg__time" x-text="$store.ui.fmtClock(seg.start)"></span>
+                                            <span class="tseg__text"><span x-text="seg.text"></span><span class="tseg__flag" x-show="seg.flagged" x-text="$t('flagged')"></span></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </section>
+
+                            <!-- Voice signals -->
+                            <section class="card">
+                                <div class="card__hd"><div class="card__title"><svg><use href="#i-voice"/></svg><span x-text="$t('signals')"></span></div></div>
+                                <div class="card__bd" style="display:flex; flex-direction:column; gap:18px">
+                                    <template x-if="v.emotion">
+                                        <div class="bars">
+                                            <template x-for="key in ['arousal','dominance','valence','anger','calm','stress']" :key="key">
+                                                <div class="bar" x-show="v.emotion[key] != null">
+                                                    <span class="bar__label" x-text="$t('emo_' + key)"></span>
+                                                    <span class="bar__track"><span class="bar__fill" :style="'width:' + Math.round((v.emotion[key] || 0) * 100) + '%'"></span></span>
+                                                    <span class="bar__value" x-text="Math.round((v.emotion[key] || 0) * 100) + '%'"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template x-if="!v.emotion"><div class="muted small" x-text="$t('noSignals')"></div></template>
+                                    <template x-if="v.speakers">
+                                        <dl class="kv">
+                                            <dt x-text="$t('speakers')"></dt><dd x-text="v.speakers.count"></dd>
+                                            <dt x-text="$t('adultSpeech')"></dt><dd x-text="$store.ui.fmtClock(v.speakers.adultTime)"></dd>
+                                            <dt x-text="$t('childSpeech')"></dt><dd x-text="$store.ui.fmtClock(v.speakers.childTime)"></dd>
+                                        </dl>
+                                    </template>
+                                </div>
+                            </section>
                         </div>
 
-                        <!-- Charts Section -->
-                        <div x-data="chartsManager()" class="space-y-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                                </svg>
-                                <span x-text="t('chartsTitle')"></span>
-                            </h3>
-
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                <!-- Severity Distribution (Doughnut) -->
-                                <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="t('severityDistribution')"></h4>
-                                    <div class="aspect-square max-h-[280px] mx-auto">
-                                        <canvas id="chart-severity" aria-label="Severity distribution chart" role="img"></canvas>
-                                    </div>
-                                </div>
-
-                                <!-- Incident Types (Bar) -->
-                                <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="t('incidentTypes')"></h4>
-                                    <div class="aspect-square max-h-[280px] mx-auto">
-                                        <canvas id="chart-types" aria-label="Incident types chart" role="img"></canvas>
-                                    </div>
-                                </div>
-
-                                <!-- Timeline Density (Line) -->
-                                <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="t('timelineDensity')"></h4>
-                                    <div class="aspect-video max-h-[280px]">
-                                        <canvas id="chart-timeline" aria-label="Timeline density chart" role="img"></canvas>
-                                    </div>
-                                </div>
-
-                                <!-- Emotion Radar (when available) -->
-                                <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="t('emotionRadar')"></h4>
-                                    <div class="aspect-square max-h-[280px] mx-auto">
-                                        <canvas id="chart-emotion" aria-label="Emotion radar chart" role="img"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Detailed Findings Accordion -->
-                        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                            <div class="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-                                    </svg>
-                                    <span x-text="t('detailedFindings')"></span>
-                                </h3>
-                            </div>
-
-                            <div class="divide-y divide-gray-200 dark:divide-gray-700">
-
-                                <!-- Emotions accordion -->
-                                <template x-if="currentResults.detailed_findings?.emotional_analysis?.length > 0">
-                                    <div x-data="{ open: false }">
-                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('emotions')">
-                                            <div class="flex items-center gap-3">
-                                                <span class="w-3 h-3 rounded-full bg-orange-500"></span>
-                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('emotions')"></span>
-                                                <span class="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.emotional_analysis.length"></span>
-                                            </div>
-                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                        </button>
-                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
-                                            <template x-for="(item, i) in currentResults.detailed_findings.emotional_analysis" :key="i">
-                                                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                                                    <div class="flex items-start gap-3">
-                                                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                        <div class="flex-1 min-w-0">
-                                                            <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.detected_emotion || item.description"></p>
-                                                        </div>
-                                                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
-                                                    </div>
-                                                    <template x-if="findClipUrl('emotion', item.timestamp)">
-                                                        <div class="mt-2 flex items-center gap-2">
-                                                            <svg class="w-4 h-4 text-orange-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-                                                            <audio controls preload="none" class="h-8 w-full max-w-xs" :src="findClipUrl('emotion', item.timestamp)"></audio>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <!-- Violence accordion -->
-                                <template x-if="currentResults.detailed_findings?.violence_analysis?.length > 0">
-                                    <div x-data="{ open: false }">
-                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('violence')">
-                                            <div class="flex items-center gap-3">
-                                                <span class="w-3 h-3 rounded-full bg-red-500"></span>
-                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('violence')"></span>
-                                                <span class="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.violence_analysis.length"></span>
-                                            </div>
-                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                        </button>
-                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
-                                            <template x-for="(item, i) in currentResults.detailed_findings.violence_analysis" :key="i">
-                                                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                                                    <div class="flex items-start gap-3">
-                                                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                        <div class="flex-1 min-w-0">
-                                                            <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.violence_types || item.description"></p>
-                                                        </div>
-                                                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
-                                                    </div>
-                                                    <template x-if="findClipUrl('violence', item.timestamp)">
-                                                        <div class="mt-2 flex items-center gap-2">
-                                                            <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-                                                            <audio controls preload="none" class="h-8 w-full max-w-xs" :src="findClipUrl('violence', item.timestamp)"></audio>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <!-- Cry accordion -->
-                                <template x-if="currentResults.detailed_findings?.cry_analysis?.length > 0">
-                                    <div x-data="{ open: false }">
-                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('cry')">
-                                            <div class="flex items-center gap-3">
-                                                <span class="w-3 h-3 rounded-full bg-blue-500"></span>
-                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('cry')"></span>
-                                                <span class="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.cry_analysis.length"></span>
-                                            </div>
-                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                        </button>
-                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
-                                            <template x-for="(item, i) in currentResults.detailed_findings.cry_analysis" :key="i">
-                                                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                                                    <div class="flex items-start gap-3">
-                                                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                        <div class="flex-1 min-w-0">
-                                                            <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.description"></p>
-                                                        </div>
-                                                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
-                                                    </div>
-                                                    <template x-if="findClipUrl('cry', item.timestamp)">
-                                                        <div class="mt-2 flex items-center gap-2">
-                                                            <svg class="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-                                                            <audio controls preload="none" class="h-8 w-full max-w-xs" :src="findClipUrl('cry', item.timestamp)"></audio>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <!-- Neglect accordion -->
-                                <template x-if="currentResults.detailed_findings?.neglect_analysis?.length > 0">
-                                    <div x-data="{ open: false }">
-                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('neglect')">
-                                            <div class="flex items-center gap-3">
-                                                <span class="w-3 h-3 rounded-full bg-gray-500"></span>
-                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('neglect')"></span>
-                                                <span class="text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.neglect_analysis.length"></span>
-                                            </div>
-                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                        </button>
-                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
-                                            <template x-for="(item, i) in currentResults.detailed_findings.neglect_analysis" :key="i">
-                                                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                                                    <div class="flex items-start gap-3">
-                                                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                        <div class="flex-1 min-w-0">
-                                                            <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.description"></p>
-                                                        </div>
-                                                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
-                                                    </div>
-                                                    <template x-if="findClipUrl('neglect', item.timestamp)">
-                                                        <div class="mt-2 flex items-center gap-2">
-                                                            <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-                                                            <audio controls preload="none" class="h-8 w-full max-w-xs" :src="findClipUrl('neglect', item.timestamp)"></audio>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <!-- Language accordion -->
-                                <template x-if="currentResults.detailed_findings?.language_analysis?.length > 0">
-                                    <div x-data="{ open: false }">
-                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('language')">
-                                            <div class="flex items-center gap-3">
-                                                <span class="w-3 h-3 rounded-full bg-purple-500"></span>
-                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('language')"></span>
-                                                <span class="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full" x-text="currentResults.detailed_findings.language_analysis.length"></span>
-                                            </div>
-                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                        </button>
-                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4 space-y-2">
-                                            <template x-for="(item, i) in currentResults.detailed_findings.language_analysis" :key="i">
-                                                <div class="flex items-start gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                                                    <span class="text-xs font-mono text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                    <div class="flex-1 min-w-0">
-                                                        <p class="text-sm text-gray-900 dark:text-gray-100" x-text="item.description || item.word"></p>
-                                                    </div>
-                                                    <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" :class="severityBadgeClass(item.severity)" x-text="item.severity"></span>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <!-- Key Findings -->
-                                <template x-if="currentResults.summary?.key_findings?.length > 0">
-                                    <div x-data="{ open: true }">
-                                        <button @click="open = !open" class="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-start min-h-[44px]" :aria-expanded="open" :aria-label="t('keyFindings')">
-                                            <div class="flex items-center gap-3">
-                                                <span class="w-3 h-3 rounded-full bg-primary-500"></span>
-                                                <span class="font-medium text-gray-900 dark:text-white" x-text="t('keyFindings')"></span>
-                                            </div>
-                                            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                        </button>
-                                        <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" class="px-4 sm:px-5 pb-4">
-                                            <ul class="space-y-2">
-                                                <template x-for="(finding, i) in currentResults.summary.key_findings" :key="i">
-                                                    <li class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
-                                                        <svg class="w-4 h-4 text-primary-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                                        <span x-text="finding"></span>
-                                                    </li>
-                                                </template>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </template>
-
-                            </div>
+                        <div class="cols-2" x-show="v.keyFindings.length || v.recommendations.length">
+                            <section class="card" x-show="v.keyFindings.length">
+                                <div class="card__hd"><div class="card__title"><svg><use href="#i-info"/></svg><span x-text="$t('keyFindings')"></span></div></div>
+                                <div class="card__bd"><ul class="bullets"><template x-for="(k, i) in v.keyFindings" :key="'k' + i"><li><svg><use href="#i-info"/></svg><span class="bidi" dir="auto" x-text="k"></span></li></template></ul></div>
+                            </section>
+                            <section class="card" x-show="v.recommendations.length">
+                                <div class="card__hd"><div class="card__title"><svg><use href="#i-check"/></svg><span x-text="$t('recommendations')"></span></div></div>
+                                <div class="card__bd"><ul class="bullets"><template x-for="(r, i) in v.recommendations" :key="'r' + i"><li><svg><use href="#i-check"/></svg><span class="bidi" dir="auto" x-text="r"></span></li></template></ul></div>
+                            </section>
                         </div>
 
                     </div>
@@ -705,1040 +480,19 @@
         </main>
     </div>
 
-    <!-- ===== REPORT MODAL ===== -->
-    <div
-        x-data="modalManager()"
-        x-show="modalOpen"
-        x-on:open-modal.window="openModal($event.detail)"
-        x-on:keydown.escape.window="closeModal()"
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        class="fixed inset-0 z-50 overflow-y-auto"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('reportModal')"
-        style="display: none;"
-    >
-        <!-- Backdrop -->
-        <div class="fixed inset-0 bg-black/60" @click="closeModal()"></div>
-
-        <!-- Modal content -->
-        <div class="relative min-h-screen flex items-center justify-center p-4">
-            <div
-                x-transition:enter="transition ease-out duration-300"
-                x-transition:enter-start="opacity-0 scale-95"
-                x-transition:enter-end="opacity-100 scale-100"
-                x-transition:leave="transition ease-in duration-200"
-                x-transition:leave-start="opacity-100 scale-100"
-                x-transition:leave-end="opacity-0 scale-95"
-                class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
-                @click.stop
-            >
-                <!-- Modal header -->
-                <div class="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="t('reportDetails')"></h2>
-                    <button
-                        @click="closeModal()"
-                        class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        :aria-label="t('close')"
-                    >
-                        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-
-                <!-- Modal body -->
-                <div class="flex-1 overflow-y-auto p-5 space-y-6">
-                    <template x-if="reportData">
-                        <div>
-                            <!-- Metadata -->
-                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-2">
-                                <div class="flex items-center gap-2 text-sm">
-                                    <span class="text-gray-500 dark:text-gray-400" x-text="t('fileName') + ':'"></span>
-                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reportData.metadata?.file_name"></span>
-                                </div>
-                                <div class="flex items-center gap-2 text-sm">
-                                    <span class="text-gray-500 dark:text-gray-400" x-text="t('analysisDate') + ':'"></span>
-                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reportData.metadata?.analysis_date_hebrew || reportData.metadata?.analysis_date"></span>
-                                </div>
-                                <div class="flex items-center gap-2 text-sm">
-                                    <span class="text-gray-500 dark:text-gray-400" x-text="t('overallAssessment') + ':'"></span>
-                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reportData.summary?.overall_assessment"></span>
-                                </div>
-                                <div class="flex items-center gap-2 text-sm">
-                                    <span class="text-gray-500 dark:text-gray-400" x-text="t('totalIncidents') + ':'"></span>
-                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reportData.summary?.total_incidents"></span>
-                                </div>
-                            </div>
-
-                            <!-- Detailed findings in modal -->
-                            <template x-if="reportData.detailed_findings">
-                                <div class="space-y-4">
-                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white" x-text="t('detailedFindings')"></h3>
-
-                                    <!-- Emotional -->
-                                    <template x-if="reportData.detailed_findings.emotional_analysis?.length > 0">
-                                        <div>
-                                            <h4 class="text-sm font-medium text-orange-600 dark:text-orange-400 mb-2" x-text="t('emotions')"></h4>
-                                            <template x-for="(item, i) in reportData.detailed_findings.emotional_analysis" :key="'me'+i">
-                                                <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                                                    <span class="text-xs font-mono text-gray-500 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                    <p class="text-sm text-gray-900 dark:text-gray-100 flex-1" x-text="item.detected_emotion + ' (' + item.severity + ')'"></p>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </template>
-
-                                    <!-- Violence -->
-                                    <template x-if="reportData.detailed_findings.violence_analysis?.length > 0">
-                                        <div>
-                                            <h4 class="text-sm font-medium text-red-600 dark:text-red-400 mb-2" x-text="t('violence')"></h4>
-                                            <template x-for="(item, i) in reportData.detailed_findings.violence_analysis" :key="'mv'+i">
-                                                <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                                                    <span class="text-xs font-mono text-gray-500 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                    <p class="text-sm text-gray-900 dark:text-gray-100 flex-1" x-text="(item.violence_types || item.description) + ' (' + item.severity + ')'"></p>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </template>
-
-                                    <!-- Cry -->
-                                    <template x-if="reportData.detailed_findings.cry_analysis?.length > 0">
-                                        <div>
-                                            <h4 class="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2" x-text="t('cry')"></h4>
-                                            <template x-for="(item, i) in reportData.detailed_findings.cry_analysis" :key="'mc'+i">
-                                                <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                                                    <span class="text-xs font-mono text-gray-500 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                    <p class="text-sm text-gray-900 dark:text-gray-100 flex-1" x-text="item.description"></p>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </template>
-
-                                    <!-- Neglect -->
-                                    <template x-if="reportData.detailed_findings.neglect_analysis?.length > 0">
-                                        <div>
-                                            <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2" x-text="t('neglect')"></h4>
-                                            <template x-for="(item, i) in reportData.detailed_findings.neglect_analysis" :key="'mn'+i">
-                                                <div class="flex items-start gap-3 p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                                                    <span class="text-xs font-mono text-gray-500 flex-shrink-0 mt-0.5" x-text="item.timestamp"></span>
-                                                    <p class="text-sm text-gray-900 dark:text-gray-100 flex-1" x-text="item.description"></p>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </template>
-
-                                    <!-- Recommendations -->
-                                    <template x-if="reportData.recommendations?.length > 0">
-                                        <div>
-                                            <h4 class="text-sm font-medium text-primary-600 dark:text-primary-400 mb-2" x-text="t('recommendations')"></h4>
-                                            <ul class="space-y-1">
-                                                <template x-for="(rec, i) in reportData.recommendations" :key="'rec'+i">
-                                                    <li class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
-                                                        <svg class="w-4 h-4 text-primary-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                                        <span x-text="rec"></span>
-                                                    </li>
-                                                </template>
-                                            </ul>
-                                        </div>
-                                    </template>
-                                </div>
-                            </template>
-
-                            <!-- Audio clips -->
-                            <template x-if="reportData.audio_clips?.length > 0">
-                                <div>
-                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3" x-text="t('audioClips')"></h3>
-                                    <template x-for="(clip, i) in reportData.audio_clips" :key="'clip'+i">
-                                        <div class="p-3 mb-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                                            <p class="text-xs text-gray-600 dark:text-gray-400 mb-1" x-text="clip.incident_type + ' - ' + clip.duration?.toFixed(1) + 's'"></p>
-                                            <audio controls class="w-full" preload="none">
-                                                <source :src="'/audio_clip/' + clip.filename" type="audio/wav">
-                                            </audio>
-                                        </div>
-                                    </template>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
-                </div>
-
-                <!-- Modal footer -->
-                <div class="flex items-center justify-end gap-3 p-5 border-t border-gray-200 dark:border-gray-700 flex-wrap">
-                    <a
-                        :href="reportFilename ? '/download/' + reportFilename : '#'"
-                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors min-h-[44px]"
-                        :aria-label="t('downloadJSON')"
-                    >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        JSON
-                    </a>
-                    <a
-                        :href="reportFilename ? '/download/' + reportFilename.replace('.json', '.html') : '#'"
-                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors min-h-[44px]"
-                        :aria-label="t('downloadHTML')"
-                    >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        HTML
-                    </a>
-                    <a
-                        :href="reportFilename ? '/download/' + reportFilename.replace('.json', '.csv') : '#'"
-                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors min-h-[44px]"
-                        :aria-label="t('downloadCSV')"
-                    >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        CSV
-                    </a>
-                    <button
-                        @click="closeModal()"
-                        class="px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium transition-colors min-h-[44px]"
-                        x-text="t('close')"
-                    ></button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ===== PROGRESS OVERLAY (during analysis) ===== -->
-    <div
-        x-show="analyzing"
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-        style="display: none;"
-    >
-        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-            <!-- Header -->
-            <div class="text-center">
-                <div class="w-14 h-14 mx-auto bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mb-3">
-                    <svg class="w-7 h-7 text-primary-600 dark:text-primary-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
-                    </svg>
-                </div>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="t('analyzingAudio')"></h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="progressMessage"></p>
-            </div>
-
-            <!-- Progress bar -->
-            <div>
-                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1.5">
-                    <span x-text="t('step') + ' ' + progressStep + ' / ' + progressTotal"></span>
-                    <span x-text="progressPercent + '%'"></span>
-                </div>
-                <div
-                    class="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"
-                    role="progressbar"
-                    :aria-valuenow="progressPercent"
-                    aria-valuemin="0"
-                    :aria-valuemax="100"
-                    :aria-label="t('analysisProgress')"
-                >
-                    <div class="h-full bg-primary-600 rounded-full transition-all duration-500 ease-out" :style="'width: ' + progressPercent + '%'"></div>
-                </div>
-            </div>
-
-            <!-- Step indicators -->
-            <div class="space-y-1.5">
-                <template x-for="step in progressSteps" :key="step.num">
-                    <div class="flex items-center gap-3 p-2 rounded-lg text-sm transition-all" :class="{
-                        'bg-green-50 dark:bg-green-900/20': step.num < progressStep,
-                        'bg-primary-50 dark:bg-primary-900/20': step.num === progressStep,
-                        '': step.num > progressStep
-                    }">
-                        <!-- Step number circle -->
-                        <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold" :class="{
-                            'bg-green-500 text-white': step.num < progressStep,
-                            'bg-primary-600 text-white': step.num === progressStep,
-                            'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400': step.num > progressStep
-                        }">
-                            <!-- Checkmark for completed -->
-                            <template x-if="step.num < progressStep">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                            </template>
-                            <template x-if="step.num >= progressStep">
-                                <span x-text="step.num"></span>
-                            </template>
-                        </div>
-                        <span class="text-gray-700 dark:text-gray-300" :class="{ 'font-medium': step.num === progressStep }" x-text="t(step.key)"></span>
-                    </div>
-                </template>
-            </div>
-
-            <!-- Cancel button -->
-            <div class="text-center">
-                <button
-                    @click="cancelAnalysis()"
-                    class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm transition-colors min-h-[44px]"
-                    :aria-label="t('cancelButton')"
-                    x-text="t('cancelButton')"
-                ></button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ===== TOAST NOTIFICATIONS ===== -->
-    <div class="fixed bottom-4 end-4 z-50 space-y-2" id="toast-container">
-        <template x-for="(toast, i) in toasts" :key="toast.id">
-            <div
-                x-show="toast.visible"
-                x-transition:enter="transition ease-out duration-300"
-                x-transition:enter-start="opacity-0 translate-y-2"
-                x-transition:enter-end="opacity-100 translate-y-0"
-                x-transition:leave="transition ease-in duration-200"
-                x-transition:leave-start="opacity-100 translate-y-0"
-                x-transition:leave-end="opacity-0 translate-y-2"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg min-w-[300px] max-w-md"
-                :class="{
-                    'bg-green-600 text-white': toast.type === 'success',
-                    'bg-red-600 text-white': toast.type === 'error',
-                    'bg-blue-600 text-white': toast.type === 'info'
-                }"
-            >
-                <svg x-show="toast.type === 'success'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                <svg x-show="toast.type === 'error'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                <svg x-show="toast.type === 'info'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <span class="text-sm font-medium" x-text="toast.message"></span>
+    <!-- Toasts -->
+    <div class="toasts" aria-live="polite">
+        <template x-for="t in $store.toasts.items" :key="t.id">
+            <div class="toast" :class="'toast--' + t.type"
+                 x-transition:enter="fade-enter" x-transition:enter-start="fade-enter-start" x-transition:enter-end="fade-enter-end"
+                 x-transition:leave="fade-leave" x-transition:leave-start="fade-leave-start" x-transition:leave-end="fade-leave-end">
+                <svg x-show="t.type === 'success'"><use href="#i-check"/></svg>
+                <svg x-show="t.type === 'error'"><use href="#i-alert"/></svg>
+                <svg x-show="t.type === 'info'"><use href="#i-info"/></svg>
+                <span x-text="t.message"></span>
             </div>
         </template>
     </div>
 
-    <!-- ===== SCRIPTS ===== -->
-    <script>
-    /* ========================================
-       Translations (EN / HE)
-       ======================================== */
-    const translations = {
-        en: {
-            pageTitle: 'SoundShield-AI - Kindergarten Audio Analysis',
-            subtitle: 'Kindergarten Audio Analysis',
-            skipToContent: 'Skip to main content',
-            toggleSidebar: 'Toggle sidebar',
-            toggleLanguage: 'Toggle language',
-            toggleDarkMode: 'Toggle dark mode',
-            uploadTitle: 'Upload Audio',
-            uploadDragDrop: 'Drag & drop audio file or click to browse',
-            uploadDropzone: 'Audio file upload dropzone',
-            analysisLanguage: 'Analysis Language',
-            uploadButton: 'Upload & Analyze',
-            cancelButton: 'Cancel',
-            analyzing: 'Analyzing...',
-            historyTitle: 'Analysis History',
-            refreshHistory: 'Refresh history',
-            noHistory: 'No analyses yet',
-            viewReport: 'View report',
-            emptyTitle: 'Upload an audio file to begin analysis',
-            emptyMessage: 'SoundShield-AI will analyze the recording for signs of emotional abuse, violence, neglect, inappropriate language, and inadequate response to child distress.',
-            gettingStarted: 'Getting Started',
-            step1Desc: 'Upload a kindergarten audio recording (WAV, MP3, M4A, FLAC, AAC, OGG)',
-            step2Desc: 'Select the analysis language (Hebrew or English)',
-            step3Desc: 'Review the detailed analysis report with incidents, waveform, and charts',
-            riskLevel: 'Risk Level',
-            totalIncidents: 'Total Incidents',
-            criticalIncidents: 'Critical Incidents',
-            recordingDuration: 'Recording Duration',
-            detectedEvents: 'Detected events',
-            requireAttention: 'Require immediate attention',
-            minutes: 'minutes',
-            waveformTitle: 'Audio Waveform',
-            play: 'Play',
-            pause: 'Pause',
-            stop: 'Stop',
-            violence: 'Violence',
-            emotion: 'Emotions',
-            cry: 'Cries',
-            neglect: 'Neglect',
-            language: 'Language',
-            chartsTitle: 'Analysis Charts',
-            severityDistribution: 'Severity Distribution',
-            incidentTypes: 'Incident Types',
-            timelineDensity: 'Timeline Density',
-            emotionRadar: 'Emotion Radar',
-            detailedFindings: 'Detailed Findings',
-            emotions: 'Emotional Analysis',
-            keyFindings: 'Key Findings',
-            reportModal: 'Analysis report modal',
-            reportDetails: 'Report Details',
-            close: 'Close',
-            fileName: 'File',
-            analysisDate: 'Analysis Date',
-            overallAssessment: 'Overall Assessment',
-            downloadJSON: 'Download JSON',
-            downloadHTML: 'Download HTML',
-            downloadCSV: 'Download CSV',
-            recommendations: 'Recommendations',
-            audioClips: 'Audio Clips',
-            analyzingAudio: 'Analyzing Audio',
-            step: 'Step',
-            analysisProgress: 'Analysis progress',
-            progressStep1: 'Basic audio analysis',
-            progressStep2: 'Emotion detection',
-            progressStep3: 'Baby cry detection',
-            progressStep4: 'Violence detection',
-            progressStep5: 'Neglect detection',
-            progressStep6: 'Advanced ML analysis',
-            progressStep7: 'Inappropriate language detection',
-            analysisComplete: 'Analysis completed successfully!',
-            analysisError: 'Analysis error',
-            uploadError: 'Upload error'
-        },
-        he: {
-            pageTitle: 'SoundShield-AI - ניתוח הקלטות גן ילדים',
-            subtitle: 'ניתוח הקלטות גן ילדים',
-            skipToContent: 'דלג לתוכן הראשי',
-            toggleSidebar: 'פתח/סגור תפריט צד',
-            toggleLanguage: 'החלף שפה',
-            toggleDarkMode: 'מצב כהה/בהיר',
-            uploadTitle: 'העלאת אודיו',
-            uploadDragDrop: 'גרור קובץ אודיו לכאן או לחץ לבחירה',
-            uploadDropzone: 'אזור העלאת קובץ אודיו',
-            analysisLanguage: 'שפת הניתוח',
-            uploadButton: 'העלה ונתח',
-            cancelButton: 'ביטול',
-            analyzing: 'מנתח...',
-            historyTitle: 'היסטוריית ניתוחים',
-            refreshHistory: 'רענן היסטוריה',
-            noHistory: 'אין ניתוחים עדיין',
-            viewReport: 'צפה בדוח',
-            emptyTitle: 'העלה קובץ אודיו כדי להתחיל ניתוח',
-            emptyMessage: 'SoundShield-AI ינתח את ההקלטה לאיתור סימנים של התעללות רגשית, אלימות, הזנחה, שפה לא הולמת ותגובה לא מספקת למצוקת ילדים.',
-            gettingStarted: 'איך להתחיל',
-            step1Desc: 'העלה הקלטת גן ילדים (WAV, MP3, M4A, FLAC, AAC, OGG)',
-            step2Desc: 'בחר את שפת הניתוח (עברית או אנגלית)',
-            step3Desc: 'עיין בדוח הניתוח המפורט עם אירועים, צורת גל ותרשימים',
-            riskLevel: 'רמת סיכון',
-            totalIncidents: 'סך אירועים',
-            criticalIncidents: 'אירועים קריטיים',
-            recordingDuration: 'משך הקלטה',
-            detectedEvents: 'אירועים שזוהו',
-            requireAttention: 'דורשים תשומת לב מיידית',
-            minutes: 'דקות',
-            waveformTitle: 'צורת גל אודיו',
-            play: 'נגן',
-            pause: 'השהה',
-            stop: 'עצור',
-            violence: 'אלימות',
-            emotion: 'רגשות',
-            cry: 'בכי',
-            neglect: 'הזנחה',
-            language: 'שפה',
-            chartsTitle: 'תרשימי ניתוח',
-            severityDistribution: 'התפלגות חומרה',
-            incidentTypes: 'סוגי אירועים',
-            timelineDensity: 'צפיפות ציר זמן',
-            emotionRadar: 'רדאר רגשות',
-            detailedFindings: 'ממצאים מפורטים',
-            emotions: 'ניתוח רגשי',
-            keyFindings: 'ממצאים עיקריים',
-            reportModal: 'חלון דוח ניתוח',
-            reportDetails: 'פרטי הדוח',
-            close: 'סגור',
-            fileName: 'קובץ',
-            analysisDate: 'תאריך ניתוח',
-            overallAssessment: 'הערכה כללית',
-            downloadJSON: 'הורד JSON',
-            downloadHTML: 'הורד HTML',
-            downloadCSV: 'הורד CSV',
-            recommendations: 'המלצות',
-            audioClips: 'קטעי אודיו',
-            analyzingAudio: 'מנתח אודיו',
-            step: 'שלב',
-            analysisProgress: 'התקדמות ניתוח',
-            progressStep1: 'ניתוח אודיו בסיסי',
-            progressStep2: 'זיהוי רגשות',
-            progressStep3: 'זיהוי בכי',
-            progressStep4: 'זיהוי אלימות',
-            progressStep5: 'זיהוי הזנחה',
-            progressStep6: 'ניתוח מתקדם עם ML',
-            progressStep7: 'זיהוי שפה לא הולמת',
-            analysisComplete: 'הניתוח הושלם בהצלחה!',
-            analysisError: 'שגיאה בניתוח',
-            uploadError: 'שגיאה בהעלאה'
-        }
-    };
-
-    /* ========================================
-       Main Alpine.js App State
-       ======================================== */
-    function appState() {
-        return {
-            lang: 'en',
-            dir: 'ltr',
-            darkMode: false,
-            sidebarOpen: false,
-            currentResults: null,
-            analyzing: false,
-            history: [],
-            toasts: [],
-            toastId: 0,
-
-            // Progress tracking
-            progressStep: 0,
-            progressTotal: 7,
-            progressMessage: '',
-            progressPercent: 0,
-            progressInterval: null,
-            progressSteps: [
-                { num: 1, key: 'progressStep1' },
-                { num: 2, key: 'progressStep2' },
-                { num: 3, key: 'progressStep3' },
-                { num: 4, key: 'progressStep4' },
-                { num: 5, key: 'progressStep5' },
-                { num: 6, key: 'progressStep6' },
-                { num: 7, key: 'progressStep7' }
-            ],
-
-            init() {
-                // Check saved preferences
-                const savedDark = localStorage.getItem('ss-dark-mode');
-                if (savedDark !== null) {
-                    this.darkMode = savedDark === 'true';
-                } else {
-                    this.darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                }
-                const savedLang = localStorage.getItem('ss-lang');
-                if (savedLang) {
-                    this.lang = savedLang;
-                    this.dir = savedLang === 'he' ? 'rtl' : 'ltr';
-                }
-
-                this.$watch('darkMode', (val) => localStorage.setItem('ss-dark-mode', val));
-                this.$watch('lang', (val) => localStorage.setItem('ss-lang', val));
-
-                this.loadHistory();
-            },
-
-            t(key) {
-                return translations[this.lang]?.[key] || translations['en'][key] || key;
-            },
-
-            toggleLang() {
-                if (this.lang === 'en') {
-                    this.lang = 'he';
-                    this.dir = 'rtl';
-                } else {
-                    this.lang = 'en';
-                    this.dir = 'ltr';
-                }
-            },
-
-            severityBadgeClass(level) {
-                if (!level) return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
-                const l = level.toLowerCase();
-                if (l === 'low' || l === 'minimal') return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
-                if (l === 'medium' || l === 'moderate') return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
-                if (l === 'high') return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300';
-                if (l === 'critical' || l === 'severe') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
-                return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
-            },
-
-            formatDate(dateStr) {
-                if (!dateStr) return '';
-                try {
-                    const d = new Date(dateStr);
-                    return d.toLocaleDateString(this.lang === 'he' ? 'he-IL' : 'en-US', {
-                        year: 'numeric', month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit'
-                    });
-                } catch {
-                    return dateStr;
-                }
-            },
-
-            formatDuration(minutes) {
-                if (minutes == null) return '0.0';
-                return Number(minutes).toFixed(1);
-            },
-
-            showToast(message, type = 'info') {
-                const id = ++this.toastId;
-                this.toasts.push({ id, message, type, visible: true });
-                setTimeout(() => {
-                    const toast = this.toasts.find(t => t.id === id);
-                    if (toast) toast.visible = false;
-                    setTimeout(() => {
-                        this.toasts = this.toasts.filter(t => t.id !== id);
-                    }, 300);
-                }, 5000);
-            },
-
-            loadHistory() {
-                fetch('/reports')
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            this.history = data.reports || [];
-                        }
-                    })
-                    .catch(() => {});
-            },
-
-            viewReport(filename) {
-                fetch('/report/' + filename)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            this.$dispatch('open-modal', { report: data.report, filename: filename });
-                        }
-                    })
-                    .catch(() => {
-                        this.showToast(this.t('analysisError'), 'error');
-                    });
-            },
-
-            startProgressPolling() {
-                this.progressStep = 0;
-                this.progressPercent = 0;
-                this.progressMessage = '';
-                this.analyzing = true;
-
-                this.progressInterval = setInterval(() => {
-                    fetch('/progress')
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.status === 'analyzing' || data.status === 'initializing' || data.status === 'completed') {
-                                this.progressStep = data.step || 0;
-                                this.progressTotal = data.total_steps || 7;
-                                this.progressMessage = data.message || '';
-                                this.progressPercent = Math.min(Math.round((this.progressStep / this.progressTotal) * 100), 100);
-                            }
-                            if (data.status === 'completed') {
-                                this.stopProgressPolling();
-                            }
-                        })
-                        .catch(() => {});
-                }, 400);
-            },
-
-            stopProgressPolling() {
-                if (this.progressInterval) {
-                    clearInterval(this.progressInterval);
-                    this.progressInterval = null;
-                }
-            },
-
-            cancelAnalysis() {
-                this.stopProgressPolling();
-                this.analyzing = false;
-            }
-        };
-    }
-
-    /* ========================================
-       Upload Manager
-       ======================================== */
-    function uploadManager() {
-        return {
-            selectedFile: null,
-            uploading: false,
-            dragOver: false,
-            analysisLang: 'he',
-
-            handleDrop(event) {
-                this.dragOver = false;
-                const files = event.dataTransfer.files;
-                if (files.length > 0) {
-                    this.selectedFile = files[0];
-                }
-            },
-
-            handleFileSelect(event) {
-                if (event.target.files.length > 0) {
-                    this.selectedFile = event.target.files[0];
-                }
-            },
-
-            clearFile() {
-                this.selectedFile = null;
-                this.$refs.fileInput.value = '';
-            },
-
-            formatFileSize(bytes) {
-                if (!bytes) return '';
-                if (bytes < 1024) return bytes + ' B';
-                if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-                return (bytes / 1048576).toFixed(1) + ' MB';
-            },
-
-            uploadFile() {
-                if (!this.selectedFile || this.uploading) return;
-                this.uploading = true;
-
-                const appData = Alpine.$data(document.querySelector('[x-data="appState()"]'));
-                appData.startProgressPolling();
-
-                const formData = new FormData();
-                formData.append('file', this.selectedFile);
-                formData.append('language', this.analysisLang);
-
-                fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(r => r.json())
-                .then(data => {
-                    appData.stopProgressPolling();
-                    appData.progressPercent = 100;
-
-                    setTimeout(() => {
-                        appData.analyzing = false;
-                        this.uploading = false;
-
-                        if (data.success) {
-                            appData.currentResults = data.results;
-                            appData.audioClips = data.audio_clips || [];
-                            appData.currentFilename = data.filename || '';
-                            appData.showToast(appData.t('analysisComplete'), 'success');
-                            appData.loadHistory();
-
-                            // Dispatch event for waveform and charts to pick up
-                            window.dispatchEvent(new CustomEvent('analysis-complete', { detail: data }));
-                        } else {
-                            appData.showToast(appData.t('analysisError') + ': ' + (data.error || ''), 'error');
-                        }
-
-                        this.clearFile();
-                    }, 800);
-                })
-                .catch(error => {
-                    appData.stopProgressPolling();
-                    appData.analyzing = false;
-                    this.uploading = false;
-                    appData.showToast(appData.t('uploadError') + ': ' + error.message, 'error');
-                });
-            }
-        };
-    }
-
-    /* ========================================
-       Waveform Manager
-       ======================================== */
-    function waveformManager() {
-        return {
-            wavesurfer: null,
-            isPlaying: false,
-            currentTime: '0:00',
-            totalTime: '0:00',
-
-            init() {
-                window.addEventListener('analysis-complete', (e) => {
-                    this.$nextTick(() => this.initWaveform(e.detail));
-                });
-            },
-
-            initWaveform(data) {
-                const container = document.getElementById('waveform-container');
-                if (!container) return;
-
-                // Destroy previous instance
-                if (this.wavesurfer) {
-                    this.wavesurfer.destroy();
-                    this.wavesurfer = null;
-                }
-
-                // Check if we have an uploaded audio URL
-                if (!data || !data.filename) return;
-
-                const audioUrl = '/uploads/' + data.filename;
-
-                try {
-                    this.wavesurfer = WaveSurfer.create({
-                        container: container,
-                        waveColor: '#93C5FD',
-                        progressColor: '#2563EB',
-                        cursorColor: '#1D4ED8',
-                        barWidth: 2,
-                        barGap: 1,
-                        barRadius: 2,
-                        height: 128,
-                        responsive: true,
-                        url: audioUrl
-                    });
-
-                    this.wavesurfer.on('ready', () => {
-                        this.totalTime = this.formatTime(this.wavesurfer.getDuration());
-                    });
-
-                    this.wavesurfer.on('audioprocess', () => {
-                        this.currentTime = this.formatTime(this.wavesurfer.getCurrentTime());
-                    });
-
-                    this.wavesurfer.on('seeking', () => {
-                        this.currentTime = this.formatTime(this.wavesurfer.getCurrentTime());
-                    });
-
-                    this.wavesurfer.on('play', () => { this.isPlaying = true; });
-                    this.wavesurfer.on('pause', () => { this.isPlaying = false; });
-                    this.wavesurfer.on('finish', () => { this.isPlaying = false; });
-                } catch (err) {
-                    console.warn('WaveSurfer init error:', err);
-                }
-            },
-
-            formatTime(seconds) {
-                if (!seconds || isNaN(seconds)) return '0:00';
-                const m = Math.floor(seconds / 60);
-                const s = Math.floor(seconds % 60);
-                return m + ':' + (s < 10 ? '0' : '') + s;
-            },
-
-            playPause() {
-                if (this.wavesurfer) {
-                    this.wavesurfer.playPause();
-                }
-            },
-
-            stop() {
-                if (this.wavesurfer) {
-                    this.wavesurfer.stop();
-                    this.isPlaying = false;
-                    this.currentTime = '0:00';
-                }
-            }
-        };
-    }
-
-    /* ========================================
-       Charts Manager
-       ======================================== */
-    function chartsManager() {
-        return {
-            charts: {},
-
-            init() {
-                window.addEventListener('analysis-complete', (e) => {
-                    this.$nextTick(() => this.renderCharts(e.detail));
-                });
-            },
-
-            renderCharts(data) {
-                if (!data || !data.results) return;
-                const results = data.results;
-                const findings = results.detailed_findings || {};
-
-                // Destroy existing charts
-                Object.values(this.charts).forEach(c => { if (c) c.destroy(); });
-                this.charts = {};
-
-                const isDark = document.documentElement.classList.contains('dark');
-                const textColor = isDark ? '#CBD5E1' : '#475569';
-                const gridColor = isDark ? 'rgba(148,163,184,0.1)' : 'rgba(148,163,184,0.2)';
-
-                // --- Severity Distribution (Doughnut) ---
-                const severityCounts = { low: 0, medium: 0, high: 0, critical: 0 };
-                const allFindings = [
-                    ...(findings.emotional_analysis || []),
-                    ...(findings.violence_analysis || []),
-                    ...(findings.cry_analysis || []),
-                    ...(findings.neglect_analysis || []),
-                    ...(findings.language_analysis || [])
-                ];
-                allFindings.forEach(f => {
-                    const sev = (f.severity || 'low').toLowerCase();
-                    if (sev in severityCounts) severityCounts[sev]++;
-                    else severityCounts['low']++;
-                });
-
-                const sevCtx = document.getElementById('chart-severity');
-                if (sevCtx) {
-                    this.charts.severity = new Chart(sevCtx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Low', 'Medium', 'High', 'Critical'],
-                            datasets: [{
-                                data: [severityCounts.low, severityCounts.medium, severityCounts.high, severityCounts.critical],
-                                backgroundColor: ['#22C55E', '#EAB308', '#F97316', '#EF4444'],
-                                borderWidth: 0
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            plugins: {
-                                legend: { position: 'bottom', labels: { color: textColor, padding: 12 } }
-                            }
-                        }
-                    });
-                }
-
-                // --- Incident Types (Bar) ---
-                const typeCounts = {
-                    'Emotions': (findings.emotional_analysis || []).length,
-                    'Violence': (findings.violence_analysis || []).length,
-                    'Cries': (findings.cry_analysis || []).length,
-                    'Neglect': (findings.neglect_analysis || []).length,
-                    'Language': (findings.language_analysis || []).length
-                };
-                const typesCtx = document.getElementById('chart-types');
-                if (typesCtx) {
-                    this.charts.types = new Chart(typesCtx, {
-                        type: 'bar',
-                        data: {
-                            labels: Object.keys(typeCounts),
-                            datasets: [{
-                                label: 'Count',
-                                data: Object.values(typeCounts),
-                                backgroundColor: ['#F97316', '#EF4444', '#3B82F6', '#6B7280', '#8B5CF6'],
-                                borderRadius: 6,
-                                borderSkipped: false
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor }, grid: { color: gridColor } },
-                                x: { ticks: { color: textColor }, grid: { display: false } }
-                            }
-                        }
-                    });
-                }
-
-                // --- Timeline Density (Line) ---
-                const timelineCtx = document.getElementById('chart-timeline');
-                if (timelineCtx) {
-                    // Group incidents by time buckets
-                    const duration = results.statistics?.audio_duration_minutes || 1;
-                    const bucketCount = Math.min(Math.max(Math.ceil(duration), 5), 20);
-                    const bucketSize = (duration * 60) / bucketCount;
-                    const buckets = new Array(bucketCount).fill(0);
-
-                    allFindings.forEach(f => {
-                        if (f.timestamp) {
-                            try {
-                                const sec = parseFloat(f.timestamp.split(' ')[0].replace('s', ''));
-                                const idx = Math.min(Math.floor(sec / bucketSize), bucketCount - 1);
-                                if (idx >= 0) buckets[idx]++;
-                            } catch (e) {}
-                        }
-                    });
-
-                    const labels = buckets.map((_, i) => {
-                        const sec = Math.round(i * bucketSize);
-                        const m = Math.floor(sec / 60);
-                        const s = sec % 60;
-                        return m + ':' + (s < 10 ? '0' : '') + s;
-                    });
-
-                    this.charts.timeline = new Chart(timelineCtx, {
-                        type: 'line',
-                        data: {
-                            labels: labels,
-                            datasets: [{
-                                label: 'Incidents',
-                                data: buckets,
-                                borderColor: '#2563EB',
-                                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                                fill: true,
-                                tension: 0.4,
-                                pointRadius: 3,
-                                pointBackgroundColor: '#2563EB'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor }, grid: { color: gridColor } },
-                                x: { ticks: { color: textColor, maxRotation: 45 }, grid: { display: false } }
-                            }
-                        }
-                    });
-                }
-
-                // --- Emotion Radar ---
-                const emotionCtx = document.getElementById('chart-emotion');
-                if (emotionCtx) {
-                    const emotionMap = {};
-                    (findings.emotional_analysis || []).forEach(e => {
-                        const emo = e.detected_emotion || 'unknown';
-                        emotionMap[emo] = (emotionMap[emo] || 0) + 1;
-                    });
-                    const emotionLabels = Object.keys(emotionMap);
-                    const emotionData = Object.values(emotionMap);
-
-                    if (emotionLabels.length > 0) {
-                        this.charts.emotion = new Chart(emotionCtx, {
-                            type: 'radar',
-                            data: {
-                                labels: emotionLabels,
-                                datasets: [{
-                                    label: 'Frequency',
-                                    data: emotionData,
-                                    backgroundColor: 'rgba(249, 115, 22, 0.2)',
-                                    borderColor: '#F97316',
-                                    pointBackgroundColor: '#F97316',
-                                    borderWidth: 2
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: true,
-                                plugins: { legend: { display: false } },
-                                scales: {
-                                    r: {
-                                        beginAtZero: true,
-                                        ticks: { stepSize: 1, color: textColor, backdropColor: 'transparent' },
-                                        grid: { color: gridColor },
-                                        pointLabels: { color: textColor }
-                                    }
-                                }
-                            }
-                        });
-                    } else {
-                        // Show placeholder text
-                        const ctx2d = emotionCtx.getContext('2d');
-                        ctx2d.font = '14px Inter, sans-serif';
-                        ctx2d.fillStyle = textColor;
-                        ctx2d.textAlign = 'center';
-                        ctx2d.fillText('No emotion data available', emotionCtx.width / 2, emotionCtx.height / 2);
-                    }
-                }
-            }
-        };
-    }
-
-    /* ========================================
-       Modal Manager
-       ======================================== */
-    function modalManager() {
-        return {
-            modalOpen: false,
-            reportData: null,
-            reportFilename: null,
-
-            openModal(detail) {
-                this.reportData = detail.report;
-                this.reportFilename = detail.filename;
-                this.modalOpen = true;
-                document.body.style.overflow = 'hidden';
-            },
-
-            closeModal() {
-                this.modalOpen = false;
-                this.reportData = null;
-                this.reportFilename = null;
-                document.body.style.overflow = '';
-            }
-        };
-    }
-    </script>
-
-    <!-- External static JS files -->
-    <script src="/static/js/app.js"></script>
-    <script src="/static/js/upload.js"></script>
-    <script src="/static/js/waveform.js"></script>
-    <script src="/static/js/charts.js"></script>
-    <script src="/static/js/modal.js"></script>
 </body>
 </html>

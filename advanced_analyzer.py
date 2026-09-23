@@ -214,7 +214,10 @@ class AdvancedAnalyzer:
             audio_file: Path to audio file
             language: Language code ('en' for English, 'he' for Hebrew)
         """
-        if not self.use_whisper or not self.whisper_model:
+        # ``whisper_model`` is only populated lazily by ``_get_whisper`` on the
+        # faster-whisper path, so gate on ``whisper_loaded`` (set by load_models)
+        # or the report's transcript section stays empty on the first analysis.
+        if not self.use_whisper or not self.whisper_loaded:
             return {}
 
         try:

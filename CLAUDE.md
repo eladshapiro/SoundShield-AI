@@ -81,22 +81,20 @@ ML models are the **default primary path** (`use_advanced=True`). Loading priori
 **Evaluation suite** (`evaluation/`, see `evaluation/README.md`): real labelled audio in `data/` (git-ignored), dev/test split by source, cached runner outputs in `data/cache/`, reports in `evaluation/results/`. Run `python -m evaluation.run_eval --tag <name> --backends heuristic,tagger,emotion2,fusion`, `python -m evaluation.fusion` (threshold sweep on dev), `python -m evaluation.montage --minutes 20` (false alarms per hour through the full pipeline). Install extras with `pip install -r requirements-eval.txt`.
 
 **Web Frontend** (`web_app.py` + `templates/index.html` + `static/`):
-- Modern dashboard: Tailwind CSS, Alpine.js, Chart.js, wavesurfer.js (all CDN, no build step)
-- **SSE progress** via `/progress-stream/<filename>` (replaces polling)
+- Single-page dashboard, Apple-style design system in `static/css/main.css` (own tokens, no Tailwind); Alpine.js + wavesurfer.js from CDN, no build step
+- All UI logic lives in `static/js/app.js` as Alpine **stores** (`ui`, `health`, `toasts`, `upload`, `analysis`, `history`, `player`) plus the `$t()` i18n magic; `normalize()` turns either a `/upload`-style payload or a saved report JSON into one view-model the template renders. Do not add a second copy of this logic inline in the template
+- Upload flow: client-side validation → `POST /upload-async` (XHR, upload %) → `EventSource /progress-stream/<job_id>` with a `/job-status/<job_id>` poll as backstop → results. `/upload` and `/job-status` share `_build_analysis_payload()` so both return the same JSON (incidents with numeric times, audio clips, metadata, recommendations)
+- Results view: verdict card (risk level + weighted-severity meter), **recording strip** (waveform with severity-coloured incident markers; click a marker/finding/transcript line to seek), findings list, Whisper transcript, neural voice-signal meters, key findings + recommendations; history sidebar reloads any saved report into the same view
+- Severity colours (gray/yellow/orange/red) are status colours and always ship with a label; incident *type* is carried by icon + text, not colour
+- Dark mode + Hebrew RTL (theme/lang applied in a `<head>` script before first paint; keys `ss-dark-mode`, `ss-lang`, `ss-rec-lang`)
 - **WebSocket live monitoring** via Socket.IO `/ws` namespace (optional, requires flask-socketio)
-- Waveform with colored incident overlays (violence=red, emotion=orange, cry=blue, neglect=gray, language=purple)
-- Severity doughnut, incident type bar, timeline density, emotion radar charts
-- Dark mode, RTL support (Hebrew), responsive mobile-first
-- Modal reports (replaces `window.open` + `document.write`)
-- Async analysis via `/upload-async` + `ThreadPoolExecutor`
-- History sidebar, comparison endpoint (`/compare?ids=1,2,3`)
-- **Admin dashboard** (`/admin`, `templates/admin.html`) — system health, DB stats, threshold tuning sliders, audit log viewer
+- **Admin dashboard** (`/admin`, `templates/admin.html`) — system health, DB stats, threshold tuning sliders, audit log viewer (still Tailwind-based, only shares the CSS tokens)
 
 **Desktop GUI** (`gui_app.py`):
 - Tabbed results: Summary | Charts (matplotlib) | Details
 - EN/HE bilingual UI
 
-Static files: `static/css/main.css`, `static/js/{app,upload,waveform,charts,modal}.js`
+Static files: `static/css/main.css`, `static/js/app.js`
 
 ## API Endpoints
 
