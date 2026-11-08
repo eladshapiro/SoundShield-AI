@@ -21,7 +21,8 @@ python example_usage.py                   # Generate synthetic audio and run ana
 python benchmark.py                       # Performance benchmark for all detectors
 
 # Tests
-python -m pytest tests/                   # Full test suite (274 tests, unittest-based; new ML tests need no model download)
+python -m pytest tests/                   # Full test suite (293 tests, unittest-based; ML tests need no model download)
+                                          # tests/conftest.py points uploads/reports/DB/log at a temp dir
 python -m pytest tests/test_api.py        # API endpoint smoke tests
 python -m pytest tests/test_integration.py # Full pipeline integration tests
 python run_system_test.py                 # End-to-end test on synthetic audio
@@ -42,10 +43,12 @@ docker build -t soundshield-ai .          # Build image only
 - `advanced_analyzer.emotion_timeline()` → `emotion_models.EmotionTimeline` (5 s windows / 2.5 s hop): `arousal`, `dominance`, `valence` (audeering wav2vec2, language-agnostic) + HuBERT `p_ang/hap/neu/sad`.
 Detectors take `timeline=` / `emotion_timeline=` kwargs; when they are `None` the original spectral heuristics run (fallback only). ML results carry `ml_backed=True`. Decision rules shared by production and the evaluation suite live in `emotion_models.anger_rule` / `aggressive_rule`; thresholds in `config.tagger`, `config.advanced`, `config.violence.aggressive_*` were tuned on real audio (`evaluation/fusion.py`) — change them only with the evaluation numbers in hand.
 
+**Learned heads (v3.1)**: `event_heads.py` runs small logistic-regression heads (`heads/anger.json`, `heads/scream.json`, committed, ~50 KB) on the embeddings the models already compute per 5 s emotion window (pooled wav2vec2 MSP-Dim hidden state, pooled HuBERT projector output, mean AST embedding, plus the dims / HuBERT probs / tag groups; `window_features()` is shared by training and production). `main.py` asks both timelines to keep embeddings (`tag(..., embeddings=True)`, `timeline(..., embeddings=True)`; captured with thread-local forward hooks, outputs unchanged) and calls `event_heads.apply_heads()`; results land in `EmotionTimeline.heads`. `anger` replaces `anger_rule` (concerning emotion) and the dims part of `aggressive_rule` (still needs arousal >= `VIOLENCE_AGGRESSIVE_AROUSAL`); `scream` replaces the raw AudioSet scream tag for `shouting`. A head is skipped — and the v3.0 rule runs — when its file is missing, a model it needs is not loaded, or `USE_LEARNED_HEADS=false`. Heads are trained and their thresholds chosen on the dev split only by `python -m evaluation.heads` (see `evaluation/README.md`); retrain them, don't hand-edit, if a backbone model changes.
+
 1. `AudioAnalyzer` (`audio_analyzer.py`) — load audio, extract features, segment into windows, **adaptive noise baseline** (first 30s calibration)
-2. `EmotionDetector` (`emotion_detector.py`) — heuristic emotion detection (fallback). Primary: `AdvancedAnalyzer.concerning_emotions_from_timeline()` — `anger` when HuBERT and the dimensional model agree, `aggression` when only arousal/dominance/valence fire; both gated on `speech_dominant`
+2. `EmotionDetector` (`emotion_detector.py`) — heuristic emotion detection (fallback). Primary: `AdvancedAnalyzer.concerning_emotions_from_timeline()` — `anger` when the learned head's P(anger) >= its threshold; without the head, `anger` when HuBERT and the dimensional model agree, `aggression` when only arousal/dominance/valence fire; all gated on `speech_dominant`
 3. `CryDetector` (`cry_detector.py`) — cry segments from the tagger (`_detect_cry_segments_ml`), staff response from `speech_dominant`, **response time metrics**, **escalation pattern detection**, **episode aggregation**; spectral heuristics as fallback
-4. `ViolenceDetector` (`violence_detector.py`) — `shouting` (scream/shout tags), `aggressive_tone` (speech-gated `aggressive_rule`), `potential_physical_violence` (impact tags); context analysis from the timeline
+4. `ViolenceDetector` (`violence_detector.py`) — `shouting` (learned `scream` head; raw scream/shout tags as fallback), `aggressive_tone` (speech-gated: `anger` head + arousal floor, or `aggressive_rule`), `potential_physical_violence` (impact tags); context analysis from the timeline
 5. `NeglectDetector` (`neglect_detector.py`) — unanswered cries, ignored distress and adult-speech ratio use `speech_dominant` via the `timeline=` kwarg (stored in `self._timeline` for the duration of the call)
 6. `AdvancedAnalyzer` (`advanced_analyzer.py`) — **faster-whisper per language on GPU** (`config.advanced.whisper_model_for(lang)`: `large-v3-turbo` for en, `ivrit-ai/whisper-large-v3-turbo-ct2` for he; `cuda_compat.preload_cuda12_libs()` makes CTranslate2 work next to CUDA-13 PyTorch), `transcribe()` caches per (file, language); HuBERT + dimensional emotion via `emotion_models.EmotionAnalyzer`
 7. `InappropriateLanguageDetector` (`inappropriate_language_detector.py`) — word-list matching on the **shared** transcript (`analyze_with_whisper(..., transcription=...)`); loads its own Whisper only when no transcript is passed
@@ -66,11 +69,12 @@ Detectors take `timeline=` / `emotion_timeline=` kwargs; when they are `None` th
 - `Validators` (`validators.py`) — SSRF-protected webhook URL validation (blocks private IPs, file://, localhost), language parameter validation, threshold bounds checking (NaN/Inf/range), audio file magic byte verification
 - `StructuredLogging` (`structured_logging.py`) — JSON logging via python-json-logger, `ContextVar`-based correlation IDs for request tracing, `StepTimer` context manager for pipeline step timing, configurable log format (json/text)
 - `ModelOptimizer` (`model_optimizer.py`) — ONNX export for HuBERT, INT8 quantization, optimized inference, benchmarking
+- `event_heads` (`event_heads.py`) — learned anger / distress-scream heads over model embeddings (`LinearHead`, `window_features`, `apply_heads`, `threshold`); weights in `heads/*.json`
 - `LiveAudioProcessor` (`live_monitor.py`) — WebSocket streaming audio analysis with Socket.IO
 - `APIError` (`api_errors.py`) — standardized error response format for all API endpoints
 - `AudioTagger` / `TagTimeline` (`audio_tagger.py`) — AudioSet event tagger (AST); GPU Kaldi filterbank path matches the HF extractor to <1e-3
 - `EmotionAnalyzer` / `EmotionTimeline` / `anger_rule` / `aggressive_rule` (`emotion_models.py`) — neural emotion timelines and the shared decision rules
-- `cuda_compat.py` — pre-loads CUDA-12 cuBLAS/cuDNN wheels so faster-whisper can use the GPU alongside CUDA-13 PyTorch
+- `cuda_compat.py` — pre-loads CUDA-12 cuBLAS/cuDNN wheels so faster-whisper can use the GPU alongside CUDA-13 PyTorch; `halve_on_oom()` retries an out-of-memory batch in halves (tagger + emotion models use it, so a busy GPU no longer silently drops the analysis to heuristics)
 
 ML models are the **default primary path** (`use_advanced=True`). Loading priority chains:
 - Whisper: faster-whisper (CTranslate2; float16 on CUDA, int8 on CPU; per-language models) → openai-whisper → disabled
@@ -78,7 +82,7 @@ ML models are the **default primary path** (`use_advanced=True`). Loading priori
 - AudioSet tagger / dimensional emotion: `transformers` models, lazy-loaded, `None` when unavailable
 - Heuristics serve as fallback only when models aren't available. Each detection is tagged `ml_backed=True/False`.
 
-**Evaluation suite** (`evaluation/`, see `evaluation/README.md`): real labelled audio in `data/` (git-ignored), dev/test split by source, cached runner outputs in `data/cache/`, reports in `evaluation/results/`. Run `python -m evaluation.run_eval --tag <name> --backends heuristic,tagger,emotion2,fusion`, `python -m evaluation.fusion` (threshold sweep on dev), `python -m evaluation.montage --minutes 20` (false alarms per hour through the full pipeline). Install extras with `pip install -r requirements-eval.txt`.
+**Evaluation suite** (`evaluation/`, see `evaluation/README.md`): real labelled audio in `data/` (git-ignored), dev/test split by source, cached runner outputs in `data/cache/`, reports in `evaluation/results/`. Run `python -m evaluation.run_eval --tag <name> --backends heuristic,tagger,emotion2,fusion`, `python -m evaluation.fusion` (threshold sweep on dev), `python -m evaluation.heads extract|train|report` (learned heads: embeddings cached in `data/cache/heads/`, cross-fitted on dev, scored on test → `results/heads.md`), `python -m evaluation.montage --minutes 20 [--kids-share 0.5]` (false alarms per hour through the full pipeline; `--kids-share` = "kindergarten" background of UrbanSound8K kids at play, fetched by `python -m evaluation.fetch_urbansound_children`). Install extras with `pip install -r requirements-eval.txt`.
 
 **Web Frontend** (`web_app.py` + `templates/index.html` + `static/`):
 - Single-page dashboard, Apple-style design system in `static/css/main.css` (own tokens, no Tailwind); Alpine.js + wavesurfer.js from CDN, no build step
@@ -177,6 +181,8 @@ Static files: `static/css/main.css`, `static/js/app.js`
 | `tests/test_audio_tagger.py` | TagTimeline queries, segments, speech_dominant, windows | 11 |
 | `tests/test_emotion_models.py` | EmotionTimeline, anger_rule, aggressive_rule | 7 |
 | `tests/test_ml_integration.py` | Detectors driven by synthetic timelines, shared transcript | 14 |
+| `tests/test_event_heads.py` | Learned heads: features, JSON round trip, detector wiring, fallbacks, shipped files | 14 |
+| `tests/test_oom_resilience.py` | `halve_on_oom`, emotion timeline under simulated GPU out-of-memory | 5 |
 
 ## Commit Convention
 

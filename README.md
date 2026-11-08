@@ -12,7 +12,34 @@ Advanced system for analyzing kindergarten audio recordings to detect inappropri
 - **Modern GUI** - User-friendly interface with language selection
 - **Web Interface** - Web-based interface for file upload and results viewing
 
-## Accuracy on real audio (v3.0)
+## Accuracy on real audio
+
+### v3.1 — far fewer false alarms
+
+What an operator lives with is **false alarms per hour**. v3.1 replaces the
+anger / aggressive-tone / shouting threshold rules with two small learned heads
+on the models' own embeddings (`event_heads.py`, `heads/*.json`), trained and
+tuned on the dev split only (`python -m evaluation.heads`). Measured on eight
+held-out 20-minute recordings (the v3.0 report's montages plus "kindergarten"
+versions where half the background is real kids at play), through the
+production detector code:
+
+| alert | v3.0: events caught | v3.0: false alarms / hour | v3.1: events caught | v3.1: false alarms / hour |
+|---|---|---|---|---|
+| angry adult speech | 78% (25/32) | 64 | **88%** (28/32) | **13** |
+| shouting (distress screams) | 68% (25/37) | 58 | **70%** (26/37) | **4.9** |
+| aggressive tone | 50% (16/32) | 42 | **88%** (28/32) | **12** |
+
+On the kindergarten recordings alone, false `shouting` alerts drop from 84–108
+to 0–12 per hour. On held-out clips the anger F1 goes from 0.65 to 0.85 and its
+false-positive rate from 13.7% to 2.6%: acted happy speech 69% → 1%, surprised
+83% → 0%, fearful 42% → 1%, kids at play and Hebrew read speech 0%. Full tables:
+`evaluation/results/heads.md`; the remaining weak spots are listed in
+`CHANGELOG.md` (acted disgust, short isolated scream clips, impact sounds).
+Thresholds are one environment variable each (`EMOTION_ANGER_HEAD_THRESHOLD`,
+`VIOLENCE_SCREAM_HEAD_THRESHOLD`; dev trade-offs in `.env.example`).
+
+### v3.0 — models instead of heuristics
 
 v3.0 replaced the hand-tuned spectral heuristics with pretrained audio models as
 the primary detectors and added a real-audio evaluation suite (`evaluation/`,
@@ -33,10 +60,10 @@ production rules.
 | Hebrew (FLEURS he_il, WER) | 66.1% | **21.4%** (`ivrit-ai/whisper-large-v3-turbo-ct2`) |
 | English (LibriSpeech dev-clean, WER) | 5.8% | **4.4%** (`large-v3-turbo`) |
 
-Anger is the hardest task: acted, exuberant "happy" speech (RAVDESS strong
-intensity) still triggers the arousal/dominance rule about 60% of the time,
-so `aggression` flags from the dimensional model alone are reported one severity
-level below `anger` flags that both emotion models agree on.  On 20-minute
+In v3.0 anger was the hardest task: acted, exuberant "happy" speech (RAVDESS
+strong intensity) triggered the arousal/dominance rule about 60% of the time
+(v3.1's learned head: 1%), so `aggression` flags from the dimensional model
+alone are reported one severity level below `anger` flags.  On 20-minute
 montages of held-out clips the full pipeline caught 15/15 inserted cries and
 11/17 screams at ~17× realtime on an RTX 4070 Ti; see
 `evaluation/results/` and `evaluation/README.md` for the full breakdown and

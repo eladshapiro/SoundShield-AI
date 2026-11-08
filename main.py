@@ -41,6 +41,7 @@ try:
     from violence_detector import ViolenceDetector
     from neglect_detector import NeglectDetector
     from report_generator import ReportGenerator
+    import event_heads
 except ImportError as e:
     logger.critical(f"Failed to import core modules: {e}")
     sys.exit(1)
@@ -298,17 +299,20 @@ class KindergartenRecordingAnalyzer:
 
             # Load waveform once (heuristic sample rate) and build ML timelines
             audio, sr = self.audio_analyzer.load_audio(file_path)
+            want_embeddings = event_heads.wants_embeddings()
             tag_timeline = None
             if self.tagger is not None:
                 try:
-                    tag_timeline = self.tagger.tag(audio, sr)
+                    tag_timeline = self.tagger.tag(audio, sr, embeddings=want_embeddings)
                     logger.info(f"Audio tagger: {len(tag_timeline.starts)} windows")
                 except Exception as e:
                     logger.warning(f"Audio tagger failed, using heuristics: {e}")
             emotion_timeline = None
             if self.advanced_analyzer and self.advanced_analyzer.emotion_analyzer is not None:
                 try:
-                    emotion_timeline = self.advanced_analyzer.emotion_timeline(audio=audio, sr=sr)
+                    emotion_timeline = self.advanced_analyzer.emotion_timeline(
+                        audio=audio, sr=sr, embeddings=want_embeddings)
+                    event_heads.apply_heads(emotion_timeline, tag_timeline)
                 except Exception as e:
                     logger.warning(f"Emotion models failed, using heuristics: {e}")
 

@@ -43,14 +43,18 @@ def _json_default(obj):
     return str(obj)
 
 class ReportGenerator:
-    def __init__(self, output_dir: str = "reports"):
+    def __init__(self, output_dir: Optional[str] = None):
         """
         Initialize Report Generator
         אתחול מחולל הדוחות
-        
+
         Args:
-            output_dir: Directory to save reports
+            output_dir: Directory to save reports (default: config.web.reports_folder,
+                i.e. REPORTS_FOLDER, so the CLI and the web app write to the same place)
         """
+        if output_dir is None:
+            from config import config
+            output_dir = config.web.reports_folder
         self.output_dir = output_dir
         self._ensure_output_directory()
         

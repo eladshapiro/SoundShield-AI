@@ -2,9 +2,73 @@
 
 All notable changes to SoundShield-AI are documented here.
 
-## [Unreleased]
+## [3.1.0] - 2026-11-08
 
-### Changed — dashboard redesign (2026-09-23)
+### Changed — learned decision heads: far fewer false alarms
+The v3.0 anger / aggression / shouting decisions were threshold rules over a few
+model outputs. On 20-minute held-out recordings they raised 64 false anger alerts
+and 58 false shouting alerts per hour, and on recordings with real kids at play
+the shouting rule fired 84-108 times per hour. v3.1 adds two small logistic
+regression heads (`event_heads.py`, weights in `heads/*.json`) on the embeddings
+the models already compute for every 5 s window, so there is no extra model and
+almost no extra compute:
+
+- **`anger` head** (wav2vec2 MSP-Dim + HuBERT embeddings, dims, HuBERT probs):
+  drives concerning-emotion `anger` and, with the arousal floor, the violence
+  detector's `aggressive_tone`. Held-out clips: F1 0.65 → 0.85, false-positive
+  rate 13.7% → 2.6% (acted happy speech 69% → 1%, surprised 83% → 0%, fearful
+  42% → 1%, read speech 9% → 0%, Hebrew read speech 0% → 0%).
+- **`scream` head** (+ AST embedding and tag groups): drives `shouting`; tells
+  fear / pain / anger screams apart from joyful screams, kids at play and cries.
+  Kids-at-play clips flagged 11% → 0%, infant cries 26% → 0.4%.
+- On the 8 held-out 20-minute montages (the v3.0 report's seeds 0/1 plus
+  "kindergarten" versions), through the production detector code:
+  anger recall 0.78 → 0.88 at 64 → 13 false alarms/hour; shouting recall
+  0.68 → 0.70 at 58 → 4.9 false alarms/hour; aggressive tone recall 0.50 → 0.88
+  at 42 → 12 false alarms/hour (`evaluation/results/heads.md`).
+- Heads are trained and their thresholds chosen on the dev split only
+  (`python -m evaluation.heads`: two speaker folds with their own montages,
+  cross-fitted). Each head falls back to the v3.0 rule when its file is missing,
+  a model it needs is not loaded, or `USE_LEARNED_HEADS=false`. Thresholds can be
+  moved with `EMOTION_ANGER_HEAD_THRESHOLD` / `VIOLENCE_SCREAM_HEAD_THRESHOLD`
+  (dev trade-off curves in `.env.example` and `evaluation/results/heads_train_*.json`).
+- `AudioTagger.tag()` / `EmotionAnalyzer.timeline()` can keep the pooled
+  embeddings of every window (`embeddings=True`, thread-local forward hooks; the
+  probabilities they return are unchanged).
+
+### Added
+- Kids-at-play test data: 637 UrbanSound8K `children_playing` clips
+  (`python -m evaluation.fetch_urbansound_children`, dataset `us8k_children`) and
+  "kindergarten" montages (`python -m evaluation.montage --kids-share 0.5`).
+- `evaluation/heads.py` (extract / train / report), `tests/test_event_heads.py`,
+  `tests/test_oom_resilience.py` (293 tests in total).
+
+### Fixed
+- A GPU without enough free memory for one batch (a smaller card, or one shared
+  with another program) made the emotion models fail and the whole analysis
+  quietly fell back to the v2 heuristics. The tagger and both emotion models now
+  retry an out-of-memory batch in halves (`cuda_compat.halve_on_oom`; identical
+  results), so they keep running on a busy GPU.
+- The test suite wrote uploads, reports, database rows and log lines into the
+  real `uploads/`, `reports/` and `soundshield.db` (the "e2e_test.wav" entries in
+  the dashboard history); `tests/conftest.py` now points them at a temp dir.
+- `ReportGenerator()` ignored `REPORTS_FOLDER` and always wrote to `reports/`.
+
+### Known limits
+- Anger is still learned from acted English speech (RAVDESS, CREMA-D); acted
+  disgust is the largest remaining false-alarm source (CREMA-D 13%).
+- On very short isolated scream clips the scream head trades recall for precision
+  (0.73 → 0.46 recall, 6% → 1.3% false positives); on whole recordings its recall
+  matches v3.0. Lower `VIOLENCE_SCREAM_HEAD_THRESHOLD` (e.g. 0.6) for more recall.
+- `potential_physical_violence` (impact sounds: doors, toys, knocks) is unchanged
+  at ~7 false alarms/hour on the montages, and `aggressive_tone` repeats most
+  `anger` alerts as a second incident (12 false/hour, the same windows).
+- The new kindergarten montages show the (unchanged) cry detector raising 21-33
+  false cries/hour around kids at play; a learned cry head is the next step.
+- End-to-end check through `main.py` (`montage_20min_{,kg_}seed0_v31.json`) agrees
+  with the report within one false alarm per montage.
+
+### Changed — dashboard redesign (2026-09-23, first released in 3.1.0)
 - Web dashboard rebuilt as a single front end (`templates/index.html`,
   `static/css/main.css`, `static/js/app.js`): Apple-style design system with its
   own tokens (no Tailwind), Alpine stores, a wavesurfer recording strip with

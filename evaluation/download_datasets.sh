@@ -28,3 +28,4 @@ tar -xzf raw/librispeech_dev_clean.tar.gz
 mkdir -p fleurs_he && tar -xzf raw/fleurs_he/dev.tar.gz -C fleurs_he && cp raw/fleurs_he/dev.tsv fleurs_he/
 echo "done: $(ls)"
 echo "CREMA-D wavs are materialised from the parquet files on first use of the evaluation suite."
+echo "Kids-at-play negatives (UrbanSound8K children_playing, ~0.6 GB): python -m evaluation.fetch_urbansound_children"

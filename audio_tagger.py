@@ -56,6 +56,7 @@ class TagTimeline:
     labels: List[str]                  # id -> name
     duration: float
     group_index: Dict[str, np.ndarray] = field(default_factory=dict)
+    embeddings: Optional[np.ndarray] = None   # [n, 768] pooled AST output (float16), for event_heads
 
     def __post_init__(self):
         name_to_id = {n: i for i, n in enumerate(self.labels)}
@@ -173,8 +174,19 @@ class AudioTagger:
         self.device = 'cpu'
         self.loaded = False
         self.load_error: Optional[str] = None
+        self._tls = threading.local()      # per-thread embedding capture (web app runs 2 workers)
 
     # -- loading ------------------------------------------------------------
+    def _register_capture(self, model) -> None:
+        """Keep the classifier's input (the pooled AST embedding) when the calling thread asks."""
+        tls = self._tls
+
+        def hook(module, inputs, output):
+            if getattr(tls, 'want', False):
+                tls.captured.append(inputs[0].detach().float().cpu().numpy())
+
+        model.classifier.register_forward_hook(hook)
+
     def load(self) -> bool:
         if self.loaded or self.load_error:
             return self.loaded
@@ -194,6 +206,7 @@ class AudioTagger:
                 model = model.to(self.device)
                 if self.device == 'cuda':
                     model = model.half()
+                self._register_capture(model)
                 self.model = model
                 self.labels = [model.config.id2label[i] for i in range(model.config.num_labels)]
                 self.loaded = True
@@ -224,33 +237,76 @@ class AudioTagger:
             starts = np.append(starts, n_samples - win)
         return starts / TARGET_SR
 
-    def tag(self, audio: np.ndarray, sr: int) -> Optional[TagTimeline]:
-        """Tag a whole recording. Returns None when the model is unavailable."""
+    def tag(self, audio: np.ndarray, sr: int, embeddings: bool = False) -> Optional[TagTimeline]:
+        """Tag a whole recording. Returns None when the model is unavailable.
+
+        ``embeddings=True`` also keeps the pooled AST embedding of every window
+        (``TagTimeline.embeddings``), which the learned heads use.
+        """
         if not self.load():
             return None
-        import torch
         audio = self._to_16k(audio, sr)
         duration = len(audio) / TARGET_SR
         starts = self.windows(len(audio))
         win = int(self.window * TARGET_SR)
-        probs = np.zeros((len(starts), len(self.labels)), dtype=np.float32)
         t0 = time.time()
-        with torch.no_grad():
-            for b in range(0, len(starts), self.batch_size):
-                chunk_starts = starts[b:b + self.batch_size]
-                chunks = []
-                for s in chunk_starts:
-                    i = int(round(s * TARGET_SR))
-                    c = audio[i:i + win]
-                    if len(c) < win:
-                        c = np.pad(c, (0, win - len(c)))
-                    chunks.append(c)
-                feats = self._features(chunks)
-                logits = self.model(feats).logits.float()
-                probs[b:b + len(chunk_starts)] = torch.sigmoid(logits).cpu().numpy()
+        from cuda_compat import is_cuda_oom
+        try:
+            probs, emb = self._tag_windows(audio, starts, win, embeddings)
+        except RuntimeError as e:
+            if not is_cuda_oom(e) or self.device == 'cpu':
+                raise
+            # not even one window fits on the GPU (another program holds it): finish on the CPU
+            # rather than letting the analysis fall back to the heuristics
+            self.to_cpu()
+            probs, emb = self._tag_windows(audio, starts, win, embeddings)
         logger.debug('AudioTagger: %d windows in %.2fs (%.1fs audio)', len(starts), time.time() - t0, duration)
         return TagTimeline(starts=np.asarray(starts, dtype=np.float64), window=self.window,
-                           probs=probs, labels=self.labels, duration=duration)
+                           probs=probs, labels=self.labels, duration=duration, embeddings=emb)
+
+    def to_cpu(self) -> None:
+        """Move the model to the CPU for the rest of the process (last resort on a full GPU)."""
+        import torch
+        logger.warning('GPU memory exhausted even for one window: the audio tagger moves to the CPU')
+        self.model = self.model.float().to('cpu')
+        self.device = 'cpu'
+        torch.cuda.empty_cache()
+
+    def _tag_windows(self, audio: np.ndarray, starts: np.ndarray, win: int, embeddings: bool):
+        import torch
+        from cuda_compat import halve_on_oom      # a full GPU shrinks the batch instead of failing
+        probs = np.zeros((len(starts), len(self.labels)), dtype=np.float32)
+        emb = None
+        emb_parts: List[Optional[np.ndarray]] = []
+
+        def run(chunks):
+            self._tls.captured = []
+            logits = self.model(self._features(chunks)).logits.float()
+            p = torch.sigmoid(logits).cpu().numpy()
+            e = np.concatenate(self._tls.captured) if embeddings and self._tls.captured else None
+            return p, e
+
+        self._tls.want = bool(embeddings)
+        try:
+            with torch.no_grad():
+                for b in range(0, len(starts), self.batch_size):
+                    chunk_starts = starts[b:b + self.batch_size]
+                    chunks = []
+                    for s in chunk_starts:
+                        i = int(round(s * TARGET_SR))
+                        c = audio[i:i + win]
+                        if len(c) < win:
+                            c = np.pad(c, (0, win - len(c)))
+                        chunks.append(c)
+                    p, e = halve_on_oom(run, chunks)
+                    probs[b:b + len(chunk_starts)] = p
+                    emb_parts.append(e)
+            if embeddings and emb_parts and all(e is not None for e in emb_parts):
+                emb = np.concatenate(emb_parts).astype(np.float16)
+        finally:
+            self._tls.want = False
+            self._tls.captured = []
+        return probs, emb
 
     def _features(self, chunks: List[np.ndarray]):
         """AST input features for a batch of equal-length 16 kHz windows.
@@ -277,10 +333,10 @@ class AudioTagger:
             out = (out - ex.mean) / (ex.std * 2)
         return out.half()
 
-    def tag_file(self, path: str) -> Optional[TagTimeline]:
+    def tag_file(self, path: str, embeddings: bool = False) -> Optional[TagTimeline]:
         import librosa
         audio, sr = librosa.load(path, sr=TARGET_SR, mono=True)
-        return self.tag(audio, sr)
+        return self.tag(audio, sr, embeddings=embeddings)
 
 
 _shared: Optional[AudioTagger] = None

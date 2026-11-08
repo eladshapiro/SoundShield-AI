@@ -13,11 +13,13 @@ cremad       2234 acted English speech clips (test+validation), 6 emotions     O
 vivae        1085 non-verbal vocalisations, 6 affects x 4 intensities          CC BY
 librispeech  dev-clean read speech (calm adult speech negatives)               CC BY
 fleurs_he    328 Hebrew read sentences with transcripts (ASR benchmark)        CC BY
+us8k_children 637 UrbanSound8K ``children_playing`` slices (kids at play)      CC BY-NC
 """
 from __future__ import annotations
 
 import csv
 import io
+import json
 import logging
 import random
 from dataclasses import dataclass, asdict
@@ -198,6 +200,30 @@ def index_fleurs_he() -> List[Clip]:
     return clips
 
 
+def index_us8k_children() -> List[Clip]:
+    """UrbanSound8K ``children_playing`` slices (real kids at play, mostly outdoors).
+
+    Fetched by ``evaluation/fetch_urbansound_children.py``.  Split by the dataset's own
+    folds (1-5 dev, 6-10 test), which keep slices of one recording together.
+    """
+    base = DATA_DIR / 'urbansound8k' / 'children_playing'
+    meta_file = base / 'meta.json'
+    if not meta_file.exists():
+        raise FileNotFoundError(f'UrbanSound8K children_playing not fetched: {meta_file}')
+    seen = set()
+    clips = []
+    for r in json.loads(meta_file.read_text()):
+        wav = base / r['slice_file_name']
+        if r['slice_file_name'] in seen or not wav.exists():
+            continue
+        seen.add(r['slice_file_name'])
+        clips.append(Clip(path=str(wav), dataset='us8k_children', category='children_playing',
+                          group='us8k/children_playing', speaker=str(r['fsID']),
+                          intensity='foreground' if r['salience'] == 1 else 'background',
+                          split='dev' if int(r['fold']) <= 5 else 'test'))
+    return sorted(clips, key=lambda c: c.path)
+
+
 INDEXERS: Dict[str, Callable[[], List[Clip]]] = {
     'esc50': index_esc50,
     'donateacry': index_donateacry,
@@ -206,6 +232,7 @@ INDEXERS: Dict[str, Callable[[], List[Clip]]] = {
     'vivae': index_vivae,
     'librispeech': index_librispeech,
     'fleurs_he': index_fleurs_he,
+    'us8k_children': index_us8k_children,
 }
 
 _INDEX_CACHE: Dict[str, List[Clip]] = {}

@@ -348,8 +348,13 @@ class AdvancedAnalyzer:
     # ------------------------------------------------------------------
     # Emotion (neural): windowed HuBERT + arousal/dominance timelines
     # ------------------------------------------------------------------
-    def emotion_timeline(self, audio_file: str = None, audio: np.ndarray = None, sr: int = None):
-        """Compute (or return None) the windowed emotion timeline for a file or array."""
+    def emotion_timeline(self, audio_file: str = None, audio: np.ndarray = None, sr: int = None,
+                         embeddings: Optional[bool] = None):
+        """Compute (or return None) the windowed emotion timeline for a file or array.
+
+        ``embeddings`` (default: whenever a learned head is installed) keeps the
+        models' pooled embeddings on the timeline for ``event_heads``.
+        """
         if self.emotion_analyzer is None:
             return None
         try:
@@ -359,7 +364,10 @@ class AdvancedAnalyzer:
                 if not os.path.exists(audio_path):
                     return None
                 audio, sr = librosa.load(audio_path, sr=TARGET_SR)
-            return self.emotion_analyzer.timeline(audio, sr)
+            if embeddings is None:
+                from event_heads import wants_embeddings
+                embeddings = wants_embeddings()
+            return self.emotion_analyzer.timeline(audio, sr, embeddings=embeddings)
         except Exception as e:
             logger.warning(f"Emotion timeline failed: {e}")
             return None
@@ -399,16 +407,22 @@ class AdvancedAnalyzer:
     def concerning_emotions_from_timeline(self, emotion_timeline, tag_timeline=None) -> List[Dict]:
         """Concerning-emotion segments (schema of EmotionDetector.detect_concerning_emotions).
 
-        * ``anger``      — HuBERT P(anger) >= anger_prob_threshold
-        * ``aggression`` — arousal AND dominance above thresholds (dimensional model)
-        Both are gated with the AudioSet tagger when available: the window must
+        * learned head (``event_heads``, when installed and its models are loaded):
+          ``anger`` when the head's P(anger) >= its dev-tuned threshold
+        * fallback rules: ``anger`` — HuBERT P(anger) >= anger_prob_threshold;
+          ``aggression`` — arousal AND dominance above thresholds (dimensional model)
+        All are gated with the AudioSet tagger when available: the window must
         contain speech and must not be dominated by a crying child.
         """
         from emotion_models import anger_rule
+        import event_heads
         tcfg = config.tagger
         results: List[Dict] = []
         if emotion_timeline is None:
             return results
+        event_heads.apply_heads(emotion_timeline, tag_timeline)
+        head_p = emotion_timeline.heads.get('anger')
+        head_thr = event_heads.threshold('anger') if head_p is not None else None
         p_ang = emotion_timeline.categorical.get('ang')
         for i, start in enumerate(emotion_timeline.starts):
             end = min(start + emotion_timeline.window, emotion_timeline.duration)
@@ -417,7 +431,10 @@ class AdvancedAnalyzer:
                 if tag_timeline.score('speech_dominant', start, end) < tcfg.speech_threshold:
                     continue
             anger = float(p_ang[i]) if p_ang is not None else 0.0
-            if emotion_timeline.has_dimensional:
+            if head_p is not None:
+                confidence = float(head_p[i])
+                flag, emotion = confidence >= head_thr, 'anger'
+            elif emotion_timeline.has_dimensional:
                 flag, confidence, emotion = anger_rule(
                     anger, float(emotion_timeline.arousal[i]),
                     float(emotion_timeline.dominance[i]), float(emotion_timeline.valence[i]))
@@ -426,6 +443,8 @@ class AdvancedAnalyzer:
             if not flag:
                 continue
             all_scores = {'anger': anger}
+            if head_p is not None:
+                all_scores['anger_head'] = float(head_p[i])
             if emotion_timeline.has_dimensional:
                 all_scores.update({'arousal': float(emotion_timeline.arousal[i]),
                                    'dominance': float(emotion_timeline.dominance[i]),

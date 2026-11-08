@@ -122,11 +122,15 @@ class ViolenceDetector:
                                      timeline, emotion_timeline) -> List[Dict]:
         """Violence segments from model timelines (ML-first path).
 
-        * ``shouting``                    — tagger scream/shout/yell probability
+        * ``shouting``                    — the learned distress-scream head (fear / pain /
+          anger screams, not joyful screams or kids at play) when installed; else the
+          tagger's scream/shout/yell probability
         * ``potential_physical_violence`` — tagger impact sounds (slap, whack, smash)
-        * ``aggressive_tone``             — high arousal AND high dominance in
-          adult speech (dimensional emotion model), gated by the tagger so a
-          crying child is not mistaken for an aggressive adult
+        * ``aggressive_tone``             — angry, aroused adult speech: the learned
+          anger head (``event_heads``) at its threshold plus arousal >=
+          ``aggressive_arousal``; without the head, high arousal AND dominance AND
+          low valence (``aggressive_rule``).  Gated by the tagger so a crying child
+          is not mistaken for an aggressive adult
         """
         tcfg = config.tagger
         duration = len(audio) / sr
@@ -141,23 +145,41 @@ class ViolenceDetector:
                 types_per_sec[t].add(vtype)
                 score_per_sec[t] = max(score_per_sec[t], score)
 
+        import event_heads
+        scream_p = None
+        if emotion_timeline is not None:
+            event_heads.apply_heads(emotion_timeline, timeline)
+            scream_p = emotion_timeline.heads.get('scream')
         if timeline is not None:
             scream = timeline.group_scores('scream')
             impact = timeline.group_scores('impact')
             for i, start in enumerate(timeline.starts):
                 end = start + timeline.window
-                if scream[i] >= tcfg.scream_threshold:
+                # the learned distress-scream head, when installed, replaces the raw scream tag
+                if scream_p is None and scream[i] >= tcfg.scream_threshold:
                     mark(start, end, 'shouting', float(scream[i]))
                 if impact[i] >= tcfg.impact_threshold:
                     mark(start, end, 'potential_physical_violence', float(impact[i]))
+        if scream_p is not None:
+            scream_thr = event_heads.threshold('scream')
+            for i, start in enumerate(emotion_timeline.starts):
+                if scream_p[i] >= scream_thr:
+                    mark(start, start + emotion_timeline.window, 'shouting', float(scream_p[i]))
 
         if emotion_timeline is not None and emotion_timeline.has_dimensional:
             from emotion_models import aggressive_rule
+            head_p = emotion_timeline.heads.get('anger')
+            head_thr = event_heads.threshold('anger') if head_p is not None else None
+            vcfg = config.violence
             for i, start in enumerate(emotion_timeline.starts):
                 end = start + emotion_timeline.window
-                flag, score = aggressive_rule(float(emotion_timeline.arousal[i]),
-                                              float(emotion_timeline.dominance[i]),
-                                              float(emotion_timeline.valence[i]))
+                if head_p is not None:
+                    score = float(head_p[i])
+                    flag = score >= head_thr and float(emotion_timeline.arousal[i]) >= vcfg.aggressive_arousal
+                else:
+                    flag, score = aggressive_rule(float(emotion_timeline.arousal[i]),
+                                                  float(emotion_timeline.dominance[i]),
+                                                  float(emotion_timeline.valence[i]))
                 if not flag:
                     continue
                 if timeline is not None:

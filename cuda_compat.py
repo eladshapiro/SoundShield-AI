@@ -10,7 +10,7 @@ import glob
 import logging
 import os
 import site
-from typing import List
+from typing import Callable, List, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -49,3 +49,50 @@ def cuda_available() -> bool:
         return bool(torch.cuda.is_available())
     except Exception:
         return False
+
+
+def is_cuda_oom(exc: BaseException) -> bool:
+    """True for PyTorch / CUDA out-of-memory errors (torch.cuda.OutOfMemoryError is a RuntimeError)."""
+    return isinstance(exc, RuntimeError) and 'out of memory' in str(exc).lower()
+
+
+def _empty_cache() -> None:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def _join(a, b):
+    if a is None or b is None:
+        return None
+    if isinstance(a, tuple):
+        return tuple(_join(x, y) for x, y in zip(a, b))
+    if isinstance(a, list):
+        return a + b
+    import numpy as np
+    return np.concatenate([a, b])
+
+
+def halve_on_oom(fn: Callable, items: Sequence):
+    """``fn(items)``; on a CUDA out-of-memory error, free the cache and retry on two halves.
+
+    A shared GPU (or a small one) used to make a whole analysis fall back to the
+    weak heuristics when one batch did not fit.  Halving keeps the models on the
+    GPU; the per-item results are the same.  Halves are joined element-wise
+    (arrays concatenated, lists added, tuples joined per field).  A single item
+    that still does not fit re-raises, so callers fall back as before.
+    """
+    try:
+        return fn(items)
+    except RuntimeError as e:
+        if not is_cuda_oom(e) or len(items) <= 1:
+            raise
+        _empty_cache()
+        mid = len(items) // 2
+        logger.warning('CUDA out of memory on a batch of %d; retrying as %d + %d',
+                       len(items), mid, len(items) - mid)
+        first = halve_on_oom(fn, items[:mid])
+        return _join(first, halve_on_oom(fn, items[mid:]))

@@ -37,6 +37,8 @@ class EmotionTimeline:
     dominance: np.ndarray
     valence: np.ndarray
     categorical: Dict[str, np.ndarray] = field(default_factory=dict)   # label -> [n]
+    embeddings: Dict[str, np.ndarray] = field(default_factory=dict)    # 'w2v2' [n,1024], 'hubert' [n,256]
+    heads: Dict[str, np.ndarray] = field(default_factory=dict)         # learned head -> P per window
 
     @property
     def has_dimensional(self) -> bool:
@@ -52,6 +54,8 @@ class EmotionTimeline:
     def window_scores(self, name: str) -> np.ndarray:
         if name in ('arousal', 'dominance', 'valence'):
             return getattr(self, name)
+        if name.startswith('head_'):
+            return self.heads.get(name[5:], np.zeros(len(self.starts), dtype=np.float32))
         return self.categorical.get(name, np.zeros(len(self.starts), dtype=np.float32))
 
     def score(self, name: str, t0: float = 0.0, t1: Optional[float] = None, reduce: str = 'max') -> float:
@@ -71,6 +75,8 @@ class EmotionTimeline:
                 d[k] = [round(float(v), 4) for v in getattr(self, k)]
         for k, v in self.categorical.items():
             d[f'p_{k}'] = [round(float(x), 4) for x in v]
+        for k, v in self.heads.items():
+            d[f'head_{k}'] = [round(float(x), 4) for x in v]
         return d
 
 
@@ -124,7 +130,7 @@ class DimensionalEmotionModel:
 
                     def forward(self, input_values):
                         hidden = self.wav2vec2(input_values)[0].mean(dim=1)
-                        return self.classifier(hidden)
+                        return self.classifier(hidden), hidden
 
                 t0 = time.time()
                 self.processor = Wav2Vec2Processor.from_pretrained(self.model_name)
@@ -140,14 +146,25 @@ class DimensionalEmotionModel:
                 logger.warning('Dimensional emotion model unavailable: %s', self.load_error)
         return self.loaded
 
-    def predict(self, chunks: Sequence[np.ndarray]) -> np.ndarray:
-        """[n, 3] array of (arousal, dominance, valence) for equal-length 16 kHz chunks."""
+    def to_cpu(self) -> None:
+        if self.model is not None and self.device != 'cpu':
+            self.model = self.model.to('cpu')
+            self.device = 'cpu'
+
+    def predict(self, chunks: Sequence[np.ndarray], return_hidden: bool = False):
+        """[n, 3] array of (arousal, dominance, valence) for equal-length 16 kHz chunks.
+
+        With ``return_hidden`` also the mean-pooled wav2vec2 hidden state [n, 1024].
+        """
         import torch
         x = self.processor(list(chunks), sampling_rate=TARGET_SR, return_tensors='pt',
                            padding=True)['input_values'].to(self.device)
         with torch.no_grad():
-            out = self.model(x)
-        return out.float().cpu().numpy()
+            out, hidden = self.model(x)
+        dims = out.float().cpu().numpy()
+        if return_hidden:
+            return dims, hidden.float().cpu().numpy()
+        return dims
 
 
 class CategoricalEmotionModel:
@@ -158,6 +175,21 @@ class CategoricalEmotionModel:
         self.pipe = None
         self.loaded = False
         self.load_error: Optional[str] = None
+        self._tls = threading.local()      # per-thread capture of the pooled projector output
+        self._hooked = False
+
+    def _ensure_hook(self) -> None:
+        """Keep the classifier's input (the pooled 256-d projector output) when the thread asks."""
+        if self._hooked:
+            return
+        tls = self._tls
+
+        def hook(module, inputs, output):
+            if getattr(tls, 'want', False):
+                tls.captured.append(inputs[0].detach().float().cpu().numpy())
+
+        self.pipe.model.classifier.register_forward_hook(hook)
+        self._hooked = True
 
     def load(self) -> bool:
         if self.loaded or self.load_error:
@@ -173,11 +205,31 @@ class CategoricalEmotionModel:
             logger.warning('HuBERT emotion model unavailable: %s', self.load_error)
         return self.loaded
 
-    def predict(self, chunks: Sequence[np.ndarray]) -> List[Dict[str, float]]:
-        results = self.pipe([np.asarray(c, dtype=np.float32) for c in chunks], batch_size=8, top_k=None)
+    def to_cpu(self) -> None:
+        import torch
+        device = getattr(self.pipe, 'device', None) if self.pipe is not None else None
+        if device is not None and torch.device(device).type != 'cpu':
+            self.pipe.model.to('cpu')
+            self.pipe.device = torch.device('cpu')
+
+    def predict(self, chunks: Sequence[np.ndarray], return_hidden: bool = False):
+        """Class probabilities per chunk; with ``return_hidden`` also the pooled embeddings [n, 256]."""
+        if return_hidden:
+            self._ensure_hook()
+        self._tls.want = bool(return_hidden)
+        self._tls.captured = []
+        try:
+            results = self.pipe([np.asarray(c, dtype=np.float32) for c in chunks], batch_size=8, top_k=None)
+            hidden = np.concatenate(self._tls.captured) if return_hidden and self._tls.captured else None
+        finally:
+            self._tls.want = False
+            self._tls.captured = []
         if chunks and isinstance(results, list) and results and isinstance(results[0], dict):
             results = [results]
-        return [{r['label'].lower(): float(r['score']) for r in res} for res in results]
+        probs = [{r['label'].lower(): float(r['score']) for r in res} for res in results]
+        if return_hidden:
+            return probs, hidden
+        return probs
 
 
 class EmotionAnalyzer:
@@ -206,7 +258,9 @@ class EmotionAnalyzer:
             starts = np.append(starts, n - win)
         return starts / TARGET_SR
 
-    def timeline(self, audio: np.ndarray, sr: int, batch_size: int = 16) -> Optional[EmotionTimeline]:
+    def timeline(self, audio: np.ndarray, sr: int, batch_size: int = 16,
+                 embeddings: bool = False) -> Optional[EmotionTimeline]:
+        """Score fixed windows; ``embeddings=True`` also keeps the models' pooled embeddings."""
         if audio.ndim > 1:
             audio = audio.mean(axis=1)
         audio = np.asarray(audio, dtype=np.float32)
@@ -223,32 +277,79 @@ class EmotionAnalyzer:
             if len(c) < int(0.5 * TARGET_SR):
                 c = np.pad(c, (0, int(0.5 * TARGET_SR) - len(c)))
             chunks.append(c)
-        # equalise lengths inside a batch (last window may be shorter on very short clips)
-        n = len(chunks)
-        arousal = dominance = valence = np.zeros(0, dtype=np.float32)
-        categorical: Dict[str, np.ndarray] = {}
         use_dim = self.dim is not None and self.dim.load()
         use_cat = self.cat is not None and self.cat.load()
         if not use_dim and not use_cat:
             return None
+        from cuda_compat import is_cuda_oom
+        try:
+            scored = self._score(chunks, batch_size, embeddings, use_dim, use_cat)
+        except RuntimeError as e:
+            if not is_cuda_oom(e):
+                raise
+            # not even one window fits on the GPU (another program holds it): finish on the CPU
+            # rather than letting the analysis fall back to the heuristics
+            self.to_cpu()
+            scored = self._score(chunks, batch_size, embeddings, use_dim, use_cat)
+        arousal, dominance, valence, categorical, emb = scored
+        return EmotionTimeline(starts=np.asarray(starts, dtype=np.float64), window=self.window,
+                               duration=duration, arousal=arousal, dominance=dominance,
+                               valence=valence, categorical=categorical, embeddings=emb)
+
+    def to_cpu(self) -> None:
+        """Move both models to the CPU for the rest of the process (last resort on a full GPU)."""
+        logger.warning('GPU memory exhausted even for one window: emotion models move to the CPU')
+        if self.dim is not None:
+            self.dim.to_cpu()
+        if self.cat is not None:
+            self.cat.to_cpu()
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+    def _score(self, chunks: List[np.ndarray], batch_size: int, embeddings: bool,
+               use_dim: bool, use_cat: bool):
+        # equalise lengths inside a batch (last window may be shorter on very short clips)
+        n = len(chunks)
+        arousal = dominance = valence = np.zeros(0, dtype=np.float32)
+        categorical: Dict[str, np.ndarray] = {}
+        from cuda_compat import halve_on_oom      # a full GPU shrinks the batch instead of failing
+        emb: Dict[str, np.ndarray] = {}
         if use_dim:
             dims = np.zeros((n, 3), dtype=np.float32)
+            hidden = []
             for b in range(0, n, batch_size):
                 batch = chunks[b:b + batch_size]
                 L = max(len(c) for c in batch)
                 batch = [np.pad(c, (0, L - len(c))) for c in batch]
-                dims[b:b + len(batch)] = self.dim.predict(batch)
+                if embeddings:
+                    out, h = halve_on_oom(lambda x: self.dim.predict(x, return_hidden=True), batch)
+                    hidden.append(h)
+                else:
+                    out = halve_on_oom(self.dim.predict, batch)
+                dims[b:b + len(batch)] = out
             arousal, dominance, valence = dims[:, 0], dims[:, 1], dims[:, 2]
+            if embeddings:
+                emb['w2v2'] = np.concatenate(hidden).astype(np.float32)
         if use_cat:
             cat = {k: np.zeros(n, dtype=np.float32) for k in HUBERT_LABELS}
+            hidden = []
             for b in range(0, n, batch_size):
-                for j, scores in enumerate(self.cat.predict(chunks[b:b + batch_size])):
+                res = halve_on_oom(lambda x: self.cat.predict(x, return_hidden=embeddings),
+                                   chunks[b:b + batch_size])
+                if embeddings:
+                    res, h = res
+                    if h is not None:
+                        hidden.append(h)
+                for j, scores in enumerate(res):
                     for k in HUBERT_LABELS:
                         cat[k][b + j] = scores.get(k, 0.0)
             categorical = cat
-        return EmotionTimeline(starts=np.asarray(starts, dtype=np.float64), window=self.window,
-                               duration=duration, arousal=arousal, dominance=dominance,
-                               valence=valence, categorical=categorical)
+            if embeddings and hidden and sum(len(h) for h in hidden) == n:
+                emb['hubert'] = np.concatenate(hidden).astype(np.float32)
+        return arousal, dominance, valence, categorical, emb
 
 
 # ---------------------------------------------------------------------------

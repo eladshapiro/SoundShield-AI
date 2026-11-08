@@ -45,9 +45,17 @@ def _load(path: str) -> np.ndarray:
     return y.astype(np.float32)
 
 
-def build(minutes: float, seed: int, with_events: bool) -> Tuple[np.ndarray, List[Dict]]:
+def build(minutes: float, seed: int, with_events: bool, split: str = 'test',
+          keep=None, kids_share: float = 0.0) -> Tuple[np.ndarray, List[Dict]]:
+    """Montage from one split's clips (``test`` for reporting, ``dev`` for training heads).
+
+    ``keep`` optionally narrows the clip pool further (``evaluation.heads`` builds one
+    montage set per dev fold so cross-fitted predictions never see their own clips).
+    ``kids_share`` > 0 makes that fraction of the background pieces UrbanSound8K
+    ``children_playing`` clips (a "kindergarten" montage: happy shouting, laughter, play).
+    """
     rng = random.Random(seed)
-    test = lambda clips: [c for c in clips if c.split == 'test']  # noqa: E731
+    test = lambda clips: [c for c in clips if c.split == split and (keep is None or keep(c))]  # noqa: E731
     background = (test([c for c in D.index('esc50') if c.category != 'crying_baby'])
                   + test(D.index('librispeech'))
                   + test([c for c in D.index('ravdess') if c.category in ('neutral', 'calm', 'happy')])
@@ -62,11 +70,15 @@ def build(minutes: float, seed: int, with_events: bool) -> Tuple[np.ndarray, Lis
     rng.shuffle(background)
     for v in events.values():
         rng.shuffle(v)
+    kids = test(D.index('us8k_children')) if kids_share > 0 else []
+    if kids:
+        rng.shuffle(kids)
     target = int(minutes * 60 * SR)
     pieces: List[np.ndarray] = []
     labels: List[Dict] = []
     pos = 0
     bg_i = 0
+    kid_i = 0
     ev_iters = {k: iter(v) for k, v in events.items()}
     next_event_at = rng.uniform(20, 40) * SR if with_events else float('inf')
     while pos < target:
@@ -82,8 +94,12 @@ def build(minutes: float, seed: int, with_events: bool) -> Tuple[np.ndarray, Lis
             pos += len(y)
             next_event_at = pos + rng.uniform(25, 60) * SR
         else:
-            clip = background[bg_i % len(background)]
-            bg_i += 1
+            if kids and rng.random() < kids_share:
+                clip = kids[kid_i % len(kids)]
+                kid_i += 1
+            else:
+                clip = background[bg_i % len(background)]
+                bg_i += 1
             y = _load(clip.path)
             labels.append({'kind': 'background', 'start': pos / SR, 'end': (pos + len(y)) / SR,
                            'source': clip.group})
@@ -126,11 +142,18 @@ def match(detections: List[Tuple[float, float]], events: List[Dict], kind: str,
             'false_by_source': dict(sorted(false_by_source.items(), key=lambda x: -x[1]))}
 
 
+_ANALYZER = None
+
+
 def run_pipeline(path: str) -> Dict:
+    """``main.py``'s analyzer, built once and reused like the web app does (a second
+    instance would load a second copy of every model onto the GPU)."""
+    global _ANALYZER
     from main import KindergartenRecordingAnalyzer
-    analyzer = KindergartenRecordingAnalyzer(language='en', use_advanced=True)
+    if _ANALYZER is None:
+        _ANALYZER = KindergartenRecordingAnalyzer(language='en', use_advanced=True)
     t0 = time.time()
-    res = analyzer.analyze_audio_file(path)
+    res = _ANALYZER.analyze_audio_file(path)
     res['_seconds'] = time.time() - t0
     return res
 
@@ -167,18 +190,21 @@ def main(argv=None):
     ap.add_argument('--minutes', type=float, default=20)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--tag', default='montage')
+    ap.add_argument('--kids-share', type=float, default=0.0,
+                    help='fraction of background pieces that are kids playing (0.5 = "kindergarten" montage)')
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
     for noisy in ('httpx', 'httpcore', 'urllib3', 'filelock', 'huggingface_hub', 'transformers'):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     out_dir = ROOT / 'data' / 'montage'
     out_dir.mkdir(parents=True, exist_ok=True)
-    report = {'minutes': args.minutes, 'seed': args.seed}
+    report = {'minutes': args.minutes, 'seed': args.seed, 'kids_share': args.kids_share}
+    prefix = 'kg_' if args.kids_share > 0 else ''
     for name, with_events in (('negative', False), ('events', True)):
-        audio, labels = build(args.minutes, args.seed, with_events)
-        path = out_dir / f'{name}_{args.seed}.wav'
+        audio, labels = build(args.minutes, args.seed, with_events, kids_share=args.kids_share)
+        path = out_dir / f'{prefix}{name}_{args.seed}.wav'
         sf.write(path, audio, SR)
-        (out_dir / f'{name}_{args.seed}.json').write_text(json.dumps(labels, indent=1))
+        (out_dir / f'{prefix}{name}_{args.seed}.json').write_text(json.dumps(labels, indent=1))
         logger.info('%s montage: %.1f min, %d events -> %s', name, len(audio) / SR / 60,
                     sum(1 for e in labels if e['kind'] != 'background'), path)
         res = run_pipeline(str(path))

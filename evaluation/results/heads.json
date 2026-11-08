@@ -1,0 +1,1652 @@
+{
+ "heads": {
+  "anger": {
+   "blocks": [
+    "w2v2",
+    "hubert",
+    "dims",
+    "cat"
+   ],
+   "threshold": 0.825,
+   "meta": {
+    "trained": "2026-11-08",
+    "C": 0.03,
+    "dev_windows": 10668,
+    "dev_positive": 547,
+    "oof_ap": 0.8143,
+    "oof_auc": 0.9611,
+    "dev_montage_operating_point": {
+     "threshold": 0.825,
+     "false_per_hour": 8.357142857142856,
+     "recall": 0.8076923076923077,
+     "events": 104
+    },
+    "target_recall": 0.8,
+    "models": {
+     "w2v2": "audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim",
+     "hubert": "superb/hubert-large-superb-er",
+     "ast": "MIT/ast-finetuned-audioset-10-10-0.4593"
+    },
+    "protocol": "evaluation/heads.py (dev split only; 2 speaker folds, cross-fitted)"
+   }
+  },
+  "scream": {
+   "blocks": [
+    "w2v2",
+    "hubert",
+    "ast",
+    "dims",
+    "cat",
+    "tags"
+   ],
+   "threshold": 0.775,
+   "meta": {
+    "trained": "2026-11-08",
+    "C": 0.01,
+    "dev_windows": 11028,
+    "dev_positive": 356,
+    "oof_ap": 0.7153,
+    "oof_auc": 0.9823,
+    "dev_montage_operating_point": {
+     "threshold": 0.775,
+     "false_per_hour": 1.9285714285714284,
+     "recall": 0.8297872340425532,
+     "events": 94
+    },
+    "target_recall": 0.8,
+    "models": {
+     "w2v2": "audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim",
+     "hubert": "superb/hubert-large-superb-er",
+     "ast": "MIT/ast-finetuned-audioset-10-10-0.4593"
+    },
+    "protocol": "evaluation/heads.py (dev split only; 2 speaker folds, cross-fitted)"
+   }
+  }
+ },
+ "clips": {
+  "anger_v30_task": {
+   "metrics": {
+    "v3.0 rules": {
+     "n_pos": 281,
+     "n_neg": 818,
+     "tp": 190,
+     "fp": 112,
+     "fn": 91,
+     "tn": 706,
+     "precision": 0.6291390728476821,
+     "recall": 0.6761565836298933,
+     "f1": 0.6518010291595197,
+     "fpr": 0.13691931540342298,
+     "accuracy": 0.8152866242038217,
+     "roc_auc": 0.7944644084608758,
+     "avg_precision": 0.6482438701852307
+    },
+    "learned head": {
+     "n_pos": 281,
+     "n_neg": 818,
+     "tp": 224,
+     "fp": 21,
+     "fn": 57,
+     "tn": 797,
+     "precision": 0.9142857142857143,
+     "recall": 0.797153024911032,
+     "f1": 0.8517110266159695,
+     "fpr": 0.02567237163814181,
+     "accuracy": 0.9290263876251137,
+     "roc_auc": 0.9564078692062056,
+     "avg_precision": 0.9306951330904628
+    }
+   },
+   "groups": {
+    "librispeech/read_speech": {
+     "n": 237,
+     "label": 0,
+     "v3.0 rules": 21,
+     "learned head": 0
+    },
+    "cremad/neutral": {
+     "n": 147,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 3
+    },
+    "cremad/anger": {
+     "n": 185,
+     "label": 1,
+     "v3.0 rules": 100,
+     "learned head": 148
+    },
+    "cremad/happy": {
+     "n": 194,
+     "label": 0,
+     "v3.0 rules": 17,
+     "learned head": 17
+    },
+    "ravdess/neutral": {
+     "n": 48,
+     "label": 0,
+     "v3.0 rules": 6,
+     "learned head": 0
+    },
+    "ravdess/calm": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 0
+    },
+    "ravdess/happy": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 66,
+     "learned head": 1
+    },
+    "ravdess/angry": {
+     "n": 96,
+     "label": 1,
+     "v3.0 rules": 90,
+     "learned head": 76
+    }
+   }
+  },
+  "anger": {
+   "metrics": {
+    "v3.0 rules": {
+     "n_pos": 281,
+     "n_neg": 3406,
+     "tp": 190,
+     "fp": 340,
+     "fn": 91,
+     "tn": 3066,
+     "precision": 0.3584905660377358,
+     "recall": 0.6761565836298933,
+     "f1": 0.46855733662145505,
+     "fpr": 0.09982384028185555,
+     "accuracy": 0.8831027935991321,
+     "roc_auc": 0.802978520216574,
+     "avg_precision": 0.44468197862515435
+    },
+    "learned head": {
+     "n_pos": 281,
+     "n_neg": 3406,
+     "tp": 224,
+     "fp": 70,
+     "fn": 57,
+     "tn": 3336,
+     "precision": 0.7619047619047619,
+     "recall": 0.797153024911032,
+     "f1": 0.7791304347826086,
+     "fpr": 0.020551967116852612,
+     "accuracy": 0.9655546514781665,
+     "roc_auc": 0.9730891476836983,
+     "avg_precision": 0.8560880193115143
+    }
+   },
+   "groups": {
+    "librispeech/read_speech": {
+     "n": 237,
+     "label": 0,
+     "v3.0 rules": 21,
+     "learned head": 0
+    },
+    "cremad/neutral": {
+     "n": 147,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 3
+    },
+    "cremad/anger": {
+     "n": 185,
+     "label": 1,
+     "v3.0 rules": 100,
+     "learned head": 148
+    },
+    "cremad/disgust": {
+     "n": 166,
+     "label": 0,
+     "v3.0 rules": 7,
+     "learned head": 21
+    },
+    "cremad/fear": {
+     "n": 168,
+     "label": 0,
+     "v3.0 rules": 23,
+     "learned head": 13
+    },
+    "cremad/sad": {
+     "n": 185,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 3
+    },
+    "cremad/happy": {
+     "n": 194,
+     "label": 0,
+     "v3.0 rules": 17,
+     "learned head": 17
+    },
+    "donateacry/infant_cry": {
+     "n": 231,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 0
+    },
+    "esc50/urban": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "esc50/domestic": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "esc50/human_nonspeech": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "esc50/natural": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "esc50/animals": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "fleurs/he": {
+     "n": 328,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "ravdess/neutral": {
+     "n": 48,
+     "label": 0,
+     "v3.0 rules": 6,
+     "learned head": 0
+    },
+    "ravdess/calm": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 0
+    },
+    "ravdess/happy": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 66,
+     "learned head": 1
+    },
+    "ravdess/sad": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 8,
+     "learned head": 0
+    },
+    "ravdess/angry": {
+     "n": 96,
+     "label": 1,
+     "v3.0 rules": 90,
+     "learned head": 76
+    },
+    "ravdess/fearful": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 40,
+     "learned head": 1
+    },
+    "ravdess/disgust": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 68,
+     "learned head": 11
+    },
+    "ravdess/surprised": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 80,
+     "learned head": 0
+    },
+    "us8k/children_playing": {
+     "n": 326,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 0
+    }
+   }
+  },
+  "scream": {
+   "metrics": {
+    "v3.0 rules": {
+     "n_pos": 112,
+     "n_neg": 3882,
+     "tp": 82,
+     "fp": 234,
+     "fn": 30,
+     "tn": 3648,
+     "precision": 0.25949367088607594,
+     "recall": 0.7321428571428571,
+     "f1": 0.38317757009345793,
+     "fpr": 0.06027820710973725,
+     "accuracy": 0.9339008512769154,
+     "roc_auc": 0.9174923640244351,
+     "avg_precision": 0.34801596505354704
+    },
+    "learned head": {
+     "n_pos": 112,
+     "n_neg": 3882,
+     "tp": 51,
+     "fp": 51,
+     "fn": 61,
+     "tn": 3831,
+     "precision": 0.5,
+     "recall": 0.45535714285714285,
+     "f1": 0.4766355140186916,
+     "fpr": 0.01313755795981453,
+     "accuracy": 0.971957936905358,
+     "roc_auc": 0.9558700412158682,
+     "avg_precision": 0.4555513672819898
+    }
+   },
+   "groups": {
+    "librispeech/read_speech": {
+     "n": 237,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "vivae/achievement": {
+     "n": 72,
+     "label": 0,
+     "v3.0 rules": 45,
+     "learned head": 12
+    },
+    "vivae/anger": {
+     "n": 38,
+     "label": 1,
+     "v3.0 rules": 29,
+     "learned head": 24
+    },
+    "vivae/fear": {
+     "n": 37,
+     "label": 1,
+     "v3.0 rules": 28,
+     "learned head": 11
+    },
+    "vivae/pain": {
+     "n": 37,
+     "label": 1,
+     "v3.0 rules": 25,
+     "learned head": 16
+    },
+    "vivae/pleasure": {
+     "n": 93,
+     "label": 0,
+     "v3.0 rules": 17,
+     "learned head": 20
+    },
+    "vivae/surprise": {
+     "n": 78,
+     "label": 0,
+     "v3.0 rules": 40,
+     "learned head": 14
+    },
+    "cremad/neutral": {
+     "n": 147,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "cremad/anger": {
+     "n": 185,
+     "label": 0,
+     "v3.0 rules": 5,
+     "learned head": 0
+    },
+    "cremad/disgust": {
+     "n": 166,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 0
+    },
+    "cremad/fear": {
+     "n": 168,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 0
+    },
+    "cremad/sad": {
+     "n": 185,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "cremad/happy": {
+     "n": 194,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "donateacry/infant_cry": {
+     "n": 231,
+     "label": 0,
+     "v3.0 rules": 61,
+     "learned head": 1
+    },
+    "esc50/urban": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "esc50/domestic": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 3,
+     "learned head": 0
+    },
+    "esc50/human_nonspeech": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 10,
+     "learned head": 2
+    },
+    "esc50/natural": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "esc50/animals": {
+     "n": 160,
+     "label": 0,
+     "v3.0 rules": 11,
+     "learned head": 0
+    },
+    "fleurs/he": {
+     "n": 328,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "ravdess/neutral": {
+     "n": 48,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "ravdess/calm": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "ravdess/happy": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 1,
+     "learned head": 0
+    },
+    "ravdess/sad": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "ravdess/angry": {
+     "n": 48,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "ravdess/fearful": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 3,
+     "learned head": 2
+    },
+    "ravdess/disgust": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "ravdess/surprised": {
+     "n": 96,
+     "label": 0,
+     "v3.0 rules": 0,
+     "learned head": 0
+    },
+    "us8k/children_playing": {
+     "n": 326,
+     "label": 0,
+     "v3.0 rules": 36,
+     "learned head": 0
+    }
+   }
+  }
+ },
+ "montages": {
+  "test_negative_0": {
+   "v3.0 rules": {
+    "anger (concerning emotion)": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 22,
+     "true_detections": 0,
+     "false_detections": 22,
+     "false_by_source": {
+      "ravdess/happy": 5,
+      "esc50/domestic": 4,
+      "esc50/animals": 3,
+      "librispeech/read_speech": 3,
+      "cremad/happy": 3,
+      "cremad/neutral": 2,
+      "esc50/human_nonspeech": 1,
+      "ravdess/neutral": 1
+     },
+     "false_per_hour": 66.0
+    },
+    "shouting vs screams": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 4,
+     "true_detections": 0,
+     "false_detections": 4,
+     "false_by_source": {
+      "cremad/happy": 1,
+      "esc50/human_nonspeech": 1,
+      "esc50/animals": 1,
+      "esc50/domestic": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "aggressive tone vs anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 4,
+     "true_detections": 0,
+     "false_detections": 4,
+     "false_by_source": {
+      "esc50/animals": 1,
+      "cremad/neutral": 1,
+      "esc50/urban": 1,
+      "librispeech/read_speech": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "any violence vs screams+anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 11,
+     "true_detections": 0,
+     "false_detections": 11,
+     "false_by_source": {
+      "esc50/domestic": 4,
+      "esc50/animals": 2,
+      "cremad/happy": 1,
+      "esc50/human_nonspeech": 1,
+      "cremad/neutral": 1,
+      "esc50/urban": 1,
+      "librispeech/read_speech": 1
+     },
+     "false_per_hour": 33.0
+    }
+   },
+   "learned heads": {
+    "anger (concerning emotion)": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 6,
+     "true_detections": 0,
+     "false_detections": 6,
+     "false_by_source": {
+      "librispeech/read_speech": 2,
+      "ravdess/calm": 1,
+      "ravdess/happy": 1,
+      "cremad/neutral": 1,
+      "ravdess/neutral": 1
+     },
+     "false_per_hour": 18.0
+    },
+    "shouting vs screams": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 1,
+     "true_detections": 0,
+     "false_detections": 1,
+     "false_by_source": {
+      "cremad/happy": 1
+     },
+     "false_per_hour": 3.0
+    },
+    "aggressive tone vs anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 6,
+     "true_detections": 0,
+     "false_detections": 6,
+     "false_by_source": {
+      "librispeech/read_speech": 2,
+      "ravdess/calm": 1,
+      "ravdess/happy": 1,
+      "esc50/urban": 1,
+      "ravdess/neutral": 1
+     },
+     "false_per_hour": 18.0
+    },
+    "any violence vs screams+anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 11,
+     "true_detections": 0,
+     "false_detections": 11,
+     "false_by_source": {
+      "esc50/domestic": 3,
+      "librispeech/read_speech": 2,
+      "ravdess/happy": 2,
+      "cremad/happy": 1,
+      "ravdess/calm": 1,
+      "esc50/urban": 1,
+      "ravdess/neutral": 1
+     },
+     "false_per_hour": 33.0
+    }
+   }
+  },
+  "test_events_0": {
+   "v3.0 rules": {
+    "anger (concerning emotion)": {
+     "events": 10,
+     "detected_events": 8,
+     "recall": 0.8,
+     "detections": 24,
+     "true_detections": 8,
+     "false_detections": 16,
+     "false_by_source": {
+      "esc50/domestic": 4,
+      "cremad/happy": 2,
+      "cremad/neutral": 2,
+      "librispeech/read_speech": 2,
+      "ravdess/happy": 2,
+      "event:scream/vivae/pain": 1,
+      "esc50/human_nonspeech": 1,
+      "event:scream/vivae/anger": 1,
+      "event:cry/donateacry/infant_cry": 1
+     },
+     "false_per_hour": 48.0
+    },
+    "shouting vs screams": {
+     "events": 8,
+     "detected_events": 6,
+     "recall": 0.75,
+     "detections": 16,
+     "true_detections": 6,
+     "false_detections": 10,
+     "false_by_source": {
+      "event:cry/donateacry/infant_cry": 5,
+      "cremad/happy": 1,
+      "esc50/domestic": 1,
+      "ravdess/happy": 1,
+      "event:anger/cremad/anger": 1,
+      "event:anger/ravdess/angry": 1
+     },
+     "false_per_hour": 30.0
+    },
+    "aggressive tone vs anger": {
+     "events": 10,
+     "detected_events": 5,
+     "recall": 0.5,
+     "detections": 9,
+     "true_detections": 5,
+     "false_detections": 4,
+     "false_by_source": {
+      "cremad/neutral": 1,
+      "esc50/urban": 1,
+      "librispeech/read_speech": 1,
+      "ravdess/happy": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "any violence vs screams+anger": {
+     "events": 18,
+     "detected_events": 11,
+     "recall": 0.6111111111111112,
+     "detections": 24,
+     "true_detections": 11,
+     "false_detections": 13,
+     "false_by_source": {
+      "event:cry/donateacry/infant_cry": 5,
+      "ravdess/happy": 2,
+      "esc50/urban": 2,
+      "cremad/happy": 1,
+      "cremad/neutral": 1,
+      "esc50/domestic": 1,
+      "librispeech/read_speech": 1
+     },
+     "false_per_hour": 39.0
+    }
+   },
+   "learned heads": {
+    "anger (concerning emotion)": {
+     "events": 10,
+     "detected_events": 10,
+     "recall": 1.0,
+     "detections": 14,
+     "true_detections": 10,
+     "false_detections": 4,
+     "false_by_source": {
+      "cremad/happy": 2,
+      "librispeech/read_speech": 1,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "shouting vs screams": {
+     "events": 8,
+     "detected_events": 6,
+     "recall": 0.75,
+     "detections": 10,
+     "true_detections": 6,
+     "false_detections": 4,
+     "false_by_source": {
+      "esc50/human_nonspeech": 2,
+      "ravdess/happy": 1,
+      "ravdess/neutral": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "aggressive tone vs anger": {
+     "events": 10,
+     "detected_events": 10,
+     "recall": 1.0,
+     "detections": 14,
+     "true_detections": 10,
+     "false_detections": 4,
+     "false_by_source": {
+      "cremad/happy": 2,
+      "librispeech/read_speech": 1,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "any violence vs screams+anger": {
+     "events": 18,
+     "detected_events": 16,
+     "recall": 0.8888888888888888,
+     "detections": 25,
+     "true_detections": 16,
+     "false_detections": 9,
+     "false_by_source": {
+      "esc50/human_nonspeech": 2,
+      "cremad/happy": 2,
+      "librispeech/read_speech": 1,
+      "ravdess/happy": 1,
+      "cremad/neutral": 1,
+      "ravdess/neutral": 1,
+      "esc50/urban": 1
+     },
+     "false_per_hour": 27.0
+    }
+   }
+  },
+  "test_kg_negative_0": {
+   "v3.0 rules": {
+    "anger (concerning emotion)": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 28,
+     "true_detections": 0,
+     "false_detections": 28,
+     "false_by_source": {
+      "us8k/children_playing": 10,
+      "esc50/domestic": 3,
+      "librispeech/read_speech": 3,
+      "esc50/animals": 2,
+      "esc50/urban": 2,
+      "ravdess/happy": 2,
+      "esc50/natural": 1,
+      "ravdess/calm": 1,
+      "cremad/happy": 1,
+      "ravdess/neutral": 1,
+      "esc50/human_nonspeech": 1,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 84.0
+    },
+    "shouting vs screams": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 34,
+     "true_detections": 0,
+     "false_detections": 34,
+     "false_by_source": {
+      "us8k/children_playing": 18,
+      "cremad/happy": 4,
+      "esc50/urban": 4,
+      "esc50/animals": 2,
+      "esc50/human_nonspeech": 1,
+      "ravdess/calm": 1,
+      "cremad/neutral": 1,
+      "esc50/domestic": 1,
+      "librispeech/read_speech": 1,
+      "ravdess/happy": 1
+     },
+     "false_per_hour": 102.0
+    },
+    "aggressive tone vs anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 27,
+     "true_detections": 0,
+     "false_detections": 27,
+     "false_by_source": {
+      "us8k/children_playing": 14,
+      "esc50/urban": 4,
+      "esc50/animals": 3,
+      "esc50/human_nonspeech": 2,
+      "cremad/happy": 2,
+      "esc50/natural": 1,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 81.0
+    },
+    "any violence vs screams+anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 49,
+     "true_detections": 0,
+     "false_detections": 49,
+     "false_by_source": {
+      "us8k/children_playing": 28,
+      "cremad/happy": 5,
+      "esc50/urban": 4,
+      "esc50/animals": 4,
+      "esc50/human_nonspeech": 2,
+      "esc50/natural": 1,
+      "ravdess/calm": 1,
+      "cremad/neutral": 1,
+      "esc50/domestic": 1,
+      "librispeech/read_speech": 1,
+      "ravdess/happy": 1
+     },
+     "false_per_hour": 147.0
+    }
+   },
+   "learned heads": {
+    "anger (concerning emotion)": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 4,
+     "true_detections": 0,
+     "false_detections": 4,
+     "false_by_source": {
+      "librispeech/read_speech": 1,
+      "cremad/happy": 1,
+      "us8k/children_playing": 1,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "shouting vs screams": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 4,
+     "true_detections": 0,
+     "false_detections": 4,
+     "false_by_source": {
+      "cremad/happy": 1,
+      "esc50/animals": 1,
+      "us8k/children_playing": 1,
+      "ravdess/happy": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "aggressive tone vs anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 4,
+     "true_detections": 0,
+     "false_detections": 4,
+     "false_by_source": {
+      "librispeech/read_speech": 1,
+      "cremad/happy": 1,
+      "us8k/children_playing": 1,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "any violence vs screams+anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 8,
+     "true_detections": 0,
+     "false_detections": 8,
+     "false_by_source": {
+      "cremad/happy": 2,
+      "us8k/children_playing": 2,
+      "esc50/animals": 1,
+      "librispeech/read_speech": 1,
+      "ravdess/happy": 1,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 24.0
+    }
+   }
+  },
+  "test_kg_events_0": {
+   "v3.0 rules": {
+    "anger (concerning emotion)": {
+     "events": 9,
+     "detected_events": 7,
+     "recall": 0.7777777777777778,
+     "detections": 27,
+     "true_detections": 8,
+     "false_detections": 19,
+     "false_by_source": {
+      "us8k/children_playing": 8,
+      "ravdess/happy": 3,
+      "esc50/animals": 1,
+      "librispeech/read_speech": 1,
+      "esc50/domestic": 1,
+      "cremad/happy": 1,
+      "ravdess/calm": 1,
+      "cremad/neutral": 1,
+      "esc50/human_nonspeech": 1,
+      "event:scream/vivae/anger": 1
+     },
+     "false_per_hour": 57.0
+    },
+    "shouting vs screams": {
+     "events": 10,
+     "detected_events": 8,
+     "recall": 0.8,
+     "detections": 39,
+     "true_detections": 8,
+     "false_detections": 31,
+     "false_by_source": {
+      "us8k/children_playing": 12,
+      "cremad/happy": 5,
+      "event:anger/cremad/anger": 4,
+      "event:cry/donateacry/infant_cry": 4,
+      "librispeech/read_speech": 1,
+      "esc50/human_nonspeech": 1,
+      "ravdess/calm": 1,
+      "esc50/domestic": 1,
+      "event:anger/ravdess/angry": 1,
+      "esc50/natural": 1
+     },
+     "false_per_hour": 93.0
+    },
+    "aggressive tone vs anger": {
+     "events": 9,
+     "detected_events": 7,
+     "recall": 0.7777777777777778,
+     "detections": 27,
+     "true_detections": 8,
+     "false_detections": 19,
+     "false_by_source": {
+      "us8k/children_playing": 10,
+      "cremad/happy": 2,
+      "librispeech/read_speech": 1,
+      "esc50/animals": 1,
+      "ravdess/calm": 1,
+      "event:scream/vivae/anger": 1,
+      "event:scream/vivae/pain": 1,
+      "esc50/urban": 1,
+      "esc50/natural": 1
+     },
+     "false_per_hour": 57.0
+    },
+    "any violence vs screams+anger": {
+     "events": 19,
+     "detected_events": 16,
+     "recall": 0.8421052631578947,
+     "detections": 49,
+     "true_detections": 18,
+     "false_detections": 31,
+     "false_by_source": {
+      "us8k/children_playing": 16,
+      "cremad/happy": 5,
+      "event:cry/donateacry/infant_cry": 4,
+      "librispeech/read_speech": 1,
+      "esc50/animals": 1,
+      "ravdess/calm": 1,
+      "esc50/domestic": 1,
+      "esc50/urban": 1,
+      "esc50/natural": 1
+     },
+     "false_per_hour": 93.0
+    }
+   },
+   "learned heads": {
+    "anger (concerning emotion)": {
+     "events": 9,
+     "detected_events": 9,
+     "recall": 1.0,
+     "detections": 12,
+     "true_detections": 9,
+     "false_detections": 3,
+     "false_by_source": {
+      "librispeech/read_speech": 1,
+      "ravdess/calm": 1,
+      "us8k/children_playing": 1
+     },
+     "false_per_hour": 9.0
+    },
+    "shouting vs screams": {
+     "events": 10,
+     "detected_events": 7,
+     "recall": 0.7,
+     "detections": 10,
+     "true_detections": 7,
+     "false_detections": 3,
+     "false_by_source": {
+      "cremad/happy": 1,
+      "event:anger/cremad/anger": 1,
+      "us8k/children_playing": 1
+     },
+     "false_per_hour": 9.0
+    },
+    "aggressive tone vs anger": {
+     "events": 9,
+     "detected_events": 9,
+     "recall": 1.0,
+     "detections": 12,
+     "true_detections": 9,
+     "false_detections": 3,
+     "false_by_source": {
+      "librispeech/read_speech": 1,
+      "ravdess/calm": 1,
+      "us8k/children_playing": 1
+     },
+     "false_per_hour": 9.0
+    },
+    "any violence vs screams+anger": {
+     "events": 19,
+     "detected_events": 16,
+     "recall": 0.8421052631578947,
+     "detections": 22,
+     "true_detections": 16,
+     "false_detections": 6,
+     "false_by_source": {
+      "us8k/children_playing": 3,
+      "cremad/happy": 1,
+      "librispeech/read_speech": 1,
+      "ravdess/calm": 1
+     },
+     "false_per_hour": 18.0
+    }
+   }
+  },
+  "test_negative_1": {
+   "v3.0 rules": {
+    "anger (concerning emotion)": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 25,
+     "true_detections": 0,
+     "false_detections": 25,
+     "false_by_source": {
+      "ravdess/happy": 6,
+      "esc50/domestic": 4,
+      "librispeech/read_speech": 4,
+      "cremad/happy": 3,
+      "ravdess/calm": 3,
+      "esc50/animals": 2,
+      "cremad/neutral": 1,
+      "esc50/urban": 1,
+      "ravdess/neutral": 1
+     },
+     "false_per_hour": 75.0
+    },
+    "shouting vs screams": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 4,
+     "true_detections": 0,
+     "false_detections": 4,
+     "false_by_source": {
+      "esc50/animals": 2,
+      "esc50/domestic": 1,
+      "ravdess/happy": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "aggressive tone vs anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 6,
+     "true_detections": 0,
+     "false_detections": 6,
+     "false_by_source": {
+      "ravdess/happy": 2,
+      "librispeech/read_speech": 1,
+      "cremad/neutral": 1,
+      "ravdess/calm": 1,
+      "cremad/happy": 1
+     },
+     "false_per_hour": 18.0
+    },
+    "any violence vs screams+anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 13,
+     "true_detections": 0,
+     "false_detections": 13,
+     "false_by_source": {
+      "ravdess/happy": 3,
+      "esc50/animals": 2,
+      "esc50/human_nonspeech": 1,
+      "librispeech/read_speech": 1,
+      "cremad/neutral": 1,
+      "esc50/natural": 1,
+      "esc50/domestic": 1,
+      "ravdess/calm": 1,
+      "cremad/happy": 1,
+      "ravdess/neutral": 1
+     },
+     "false_per_hour": 39.0
+    }
+   },
+   "learned heads": {
+    "anger (concerning emotion)": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 6,
+     "true_detections": 0,
+     "false_detections": 6,
+     "false_by_source": {
+      "librispeech/read_speech": 3,
+      "ravdess/happy": 3
+     },
+     "false_per_hour": 18.0
+    },
+    "shouting vs screams": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 0,
+     "true_detections": 0,
+     "false_detections": 0,
+     "false_by_source": {},
+     "false_per_hour": 0.0
+    },
+    "aggressive tone vs anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 4,
+     "true_detections": 0,
+     "false_detections": 4,
+     "false_by_source": {
+      "ravdess/happy": 2,
+      "librispeech/read_speech": 1,
+      "ravdess/calm": 1
+     },
+     "false_per_hour": 12.0
+    },
+    "any violence vs screams+anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 7,
+     "true_detections": 0,
+     "false_detections": 7,
+     "false_by_source": {
+      "ravdess/happy": 2,
+      "librispeech/read_speech": 1,
+      "esc50/human_nonspeech": 1,
+      "esc50/natural": 1,
+      "ravdess/calm": 1,
+      "ravdess/neutral": 1
+     },
+     "false_per_hour": 21.0
+    }
+   }
+  },
+  "test_events_1": {
+   "v3.0 rules": {
+    "anger (concerning emotion)": {
+     "events": 7,
+     "detected_events": 5,
+     "recall": 0.7142857142857143,
+     "detections": 26,
+     "true_detections": 6,
+     "false_detections": 20,
+     "false_by_source": {
+      "librispeech/read_speech": 4,
+      "ravdess/happy": 4,
+      "esc50/domestic": 3,
+      "cremad/neutral": 2,
+      "ravdess/calm": 2,
+      "event:scream/vivae/pain": 2,
+      "event:cry/donateacry/infant_cry": 1,
+      "esc50/animals": 1,
+      "esc50/urban": 1
+     },
+     "false_per_hour": 60.0
+    },
+    "shouting vs screams": {
+     "events": 9,
+     "detected_events": 5,
+     "recall": 0.5555555555555556,
+     "detections": 12,
+     "true_detections": 5,
+     "false_detections": 7,
+     "false_by_source": {
+      "event:cry/donateacry/infant_cry": 5,
+      "event:anger/cremad/anger": 1,
+      "librispeech/read_speech": 1
+     },
+     "false_per_hour": 21.0
+    },
+    "aggressive tone vs anger": {
+     "events": 7,
+     "detected_events": 1,
+     "recall": 0.14285714285714285,
+     "detections": 6,
+     "true_detections": 1,
+     "false_detections": 5,
+     "false_by_source": {
+      "librispeech/read_speech": 1,
+      "ravdess/happy": 1,
+      "esc50/animals": 1,
+      "ravdess/calm": 1,
+      "cremad/happy": 1
+     },
+     "false_per_hour": 15.0
+    },
+    "any violence vs screams+anger": {
+     "events": 16,
+     "detected_events": 7,
+     "recall": 0.4375,
+     "detections": 20,
+     "true_detections": 7,
+     "false_detections": 13,
+     "false_by_source": {
+      "event:cry/donateacry/infant_cry": 5,
+      "librispeech/read_speech": 2,
+      "esc50/human_nonspeech": 1,
+      "ravdess/happy": 1,
+      "esc50/animals": 1,
+      "esc50/natural": 1,
+      "ravdess/calm": 1,
+      "cremad/happy": 1
+     },
+     "false_per_hour": 39.0
+    }
+   },
+   "learned heads": {
+    "anger (concerning emotion)": {
+     "events": 7,
+     "detected_events": 5,
+     "recall": 0.7142857142857143,
+     "detections": 11,
+     "true_detections": 5,
+     "false_detections": 6,
+     "false_by_source": {
+      "cremad/happy": 3,
+      "librispeech/read_speech": 1,
+      "event:cry/donateacry/infant_cry": 1,
+      "ravdess/calm": 1
+     },
+     "false_per_hour": 18.0
+    },
+    "shouting vs screams": {
+     "events": 9,
+     "detected_events": 7,
+     "recall": 0.7777777777777778,
+     "detections": 7,
+     "true_detections": 7,
+     "false_detections": 0,
+     "false_by_source": {},
+     "false_per_hour": 0.0
+    },
+    "aggressive tone vs anger": {
+     "events": 7,
+     "detected_events": 5,
+     "recall": 0.7142857142857143,
+     "detections": 11,
+     "true_detections": 5,
+     "false_detections": 6,
+     "false_by_source": {
+      "cremad/happy": 3,
+      "librispeech/read_speech": 1,
+      "event:cry/donateacry/infant_cry": 1,
+      "ravdess/calm": 1
+     },
+     "false_per_hour": 18.0
+    },
+    "any violence vs screams+anger": {
+     "events": 16,
+     "detected_events": 12,
+     "recall": 0.75,
+     "detections": 20,
+     "true_detections": 12,
+     "false_detections": 8,
+     "false_by_source": {
+      "cremad/happy": 3,
+      "librispeech/read_speech": 1,
+      "esc50/human_nonspeech": 1,
+      "event:cry/donateacry/infant_cry": 1,
+      "esc50/natural": 1,
+      "ravdess/calm": 1
+     },
+     "false_per_hour": 24.0
+    }
+   }
+  },
+  "test_kg_negative_1": {
+   "v3.0 rules": {
+    "anger (concerning emotion)": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 27,
+     "true_detections": 0,
+     "false_detections": 27,
+     "false_by_source": {
+      "us8k/children_playing": 10,
+      "librispeech/read_speech": 4,
+      "ravdess/happy": 3,
+      "esc50/urban": 2,
+      "esc50/domestic": 2,
+      "cremad/happy": 2,
+      "esc50/natural": 1,
+      "ravdess/calm": 1,
+      "esc50/animals": 1,
+      "esc50/human_nonspeech": 1
+     },
+     "false_per_hour": 81.0
+    },
+    "shouting vs screams": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 28,
+     "true_detections": 0,
+     "false_detections": 28,
+     "false_by_source": {
+      "us8k/children_playing": 13,
+      "cremad/neutral": 2,
+      "esc50/urban": 2,
+      "esc50/natural": 2,
+      "librispeech/read_speech": 2,
+      "esc50/animals": 2,
+      "ravdess/happy": 2,
+      "ravdess/calm": 1,
+      "esc50/domestic": 1,
+      "cremad/happy": 1
+     },
+     "false_per_hour": 84.0
+    },
+    "aggressive tone vs anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 27,
+     "true_detections": 0,
+     "false_detections": 27,
+     "false_by_source": {
+      "us8k/children_playing": 14,
+      "esc50/urban": 3,
+      "ravdess/happy": 3,
+      "esc50/natural": 2,
+      "librispeech/read_speech": 2,
+      "cremad/neutral": 1,
+      "esc50/animals": 1,
+      "cremad/happy": 1
+     },
+     "false_per_hour": 81.0
+    },
+    "any violence vs screams+anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 45,
+     "true_detections": 0,
+     "false_detections": 45,
+     "false_by_source": {
+      "us8k/children_playing": 23,
+      "ravdess/happy": 4,
+      "esc50/urban": 3,
+      "cremad/happy": 3,
+      "librispeech/read_speech": 3,
+      "cremad/neutral": 2,
+      "esc50/natural": 2,
+      "esc50/animals": 2,
+      "esc50/human_nonspeech": 1,
+      "ravdess/calm": 1,
+      "esc50/domestic": 1
+     },
+     "false_per_hour": 135.0
+    }
+   },
+   "learned heads": {
+    "anger (concerning emotion)": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 3,
+     "true_detections": 0,
+     "false_detections": 3,
+     "false_by_source": {
+      "librispeech/read_speech": 1,
+      "ravdess/happy": 1,
+      "us8k/children_playing": 1
+     },
+     "false_per_hour": 9.0
+    },
+    "shouting vs screams": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 0,
+     "true_detections": 0,
+     "false_detections": 0,
+     "false_by_source": {},
+     "false_per_hour": 0.0
+    },
+    "aggressive tone vs anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 2,
+     "true_detections": 0,
+     "false_detections": 2,
+     "false_by_source": {
+      "ravdess/happy": 1,
+      "us8k/children_playing": 1
+     },
+     "false_per_hour": 6.0
+    },
+    "any violence vs screams+anger": {
+     "events": 0,
+     "detected_events": 0,
+     "recall": null,
+     "detections": 7,
+     "true_detections": 0,
+     "false_detections": 7,
+     "false_by_source": {
+      "us8k/children_playing": 3,
+      "esc50/human_nonspeech": 1,
+      "cremad/happy": 1,
+      "ravdess/happy": 1,
+      "librispeech/read_speech": 1
+     },
+     "false_per_hour": 21.0
+    }
+   }
+  },
+  "test_kg_events_1": {
+   "v3.0 rules": {
+    "anger (concerning emotion)": {
+     "events": 6,
+     "detected_events": 5,
+     "recall": 0.8333333333333334,
+     "detections": 20,
+     "true_detections": 7,
+     "false_detections": 13,
+     "false_by_source": {
+      "esc50/domestic": 3,
+      "librispeech/read_speech": 2,
+      "us8k/children_playing": 2,
+      "ravdess/happy": 2,
+      "event:scream/vivae/anger": 1,
+      "ravdess/neutral": 1,
+      "cremad/neutral": 1,
+      "cremad/happy": 1
+     },
+     "false_per_hour": 39.0
+    },
+    "shouting vs screams": {
+     "events": 10,
+     "detected_events": 6,
+     "recall": 0.6,
+     "detections": 42,
+     "true_detections": 6,
+     "false_detections": 36,
+     "false_by_source": {
+      "us8k/children_playing": 14,
+      "event:cry/donateacry/infant_cry": 9,
+      "esc50/human_nonspeech": 3,
+      "librispeech/read_speech": 3,
+      "event:anger/ravdess/angry": 1,
+      "cremad/neutral": 1,
+      "esc50/animals": 1,
+      "ravdess/calm": 1,
+      "esc50/natural": 1,
+      "event:anger/cremad/anger": 1,
+      "ravdess/happy": 1
+     },
+     "false_per_hour": 108.0
+    },
+    "aggressive tone vs anger": {
+     "events": 6,
+     "detected_events": 3,
+     "recall": 0.5,
+     "detections": 24,
+     "true_detections": 3,
+     "false_detections": 21,
+     "false_by_source": {
+      "us8k/children_playing": 9,
+      "event:cry/donateacry/infant_cry": 4,
+      "librispeech/read_speech": 2,
+      "cremad/neutral": 2,
+      "event:scream/vivae/anger": 1,
+      "esc50/animals": 1,
+      "esc50/domestic": 1,
+      "ravdess/calm": 1
+     },
+     "false_per_hour": 63.0
+    },
+    "any violence vs screams+anger": {
+     "events": 16,
+     "detected_events": 11,
+     "recall": 0.6875,
+     "detections": 51,
+     "true_detections": 11,
+     "false_detections": 40,
+     "false_by_source": {
+      "us8k/children_playing": 17,
+      "event:cry/donateacry/infant_cry": 10,
+      "esc50/human_nonspeech": 3,
+      "librispeech/read_speech": 3,
+      "cremad/neutral": 2,
+      "esc50/animals": 1,
+      "esc50/domestic": 1,
+      "ravdess/calm": 1,
+      "esc50/natural": 1,
+      "ravdess/happy": 1
+     },
+     "false_per_hour": 120.0
+    }
+   },
+   "learned heads": {
+    "anger (concerning emotion)": {
+     "events": 6,
+     "detected_events": 4,
+     "recall": 0.6666666666666666,
+     "detections": 7,
+     "true_detections": 4,
+     "false_detections": 3,
+     "false_by_source": {
+      "ravdess/happy": 2,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 9.0
+    },
+    "shouting vs screams": {
+     "events": 10,
+     "detected_events": 6,
+     "recall": 0.6,
+     "detections": 7,
+     "true_detections": 6,
+     "false_detections": 1,
+     "false_by_source": {
+      "event:cry/donateacry/infant_cry": 1
+     },
+     "false_per_hour": 3.0
+    },
+    "aggressive tone vs anger": {
+     "events": 6,
+     "detected_events": 4,
+     "recall": 0.6666666666666666,
+     "detections": 7,
+     "true_detections": 4,
+     "false_detections": 3,
+     "false_by_source": {
+      "ravdess/happy": 2,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 9.0
+    },
+    "any violence vs screams+anger": {
+     "events": 16,
+     "detected_events": 10,
+     "recall": 0.625,
+     "detections": 17,
+     "true_detections": 10,
+     "false_detections": 7,
+     "false_by_source": {
+      "us8k/children_playing": 2,
+      "ravdess/happy": 2,
+      "event:cry/donateacry/infant_cry": 1,
+      "esc50/human_nonspeech": 1,
+      "cremad/neutral": 1
+     },
+     "false_per_hour": 21.0
+    }
+   }
+  }
+ }
+}

@@ -122,6 +122,9 @@ class ViolenceDetectorConfig:
     aggressive_arousal: float = _env_float('VIOLENCE_AGGRESSIVE_AROUSAL', 0.5)
     aggressive_dominance: float = _env_float('VIOLENCE_AGGRESSIVE_DOMINANCE', 0.75)
     aggressive_valence_max: float = _env_float('VIOLENCE_AGGRESSIVE_VALENCE_MAX', 0.45)
+    # Learned distress-scream head (heads/scream.json): replaces the tagger's scream threshold
+    # for `shouting` when installed. NaN = the dev-tuned operating point in the head file.
+    scream_head_threshold: float = _env_float('VIOLENCE_SCREAM_HEAD_THRESHOLD', float('nan'))
     # Context analysis
     before_violence_window: float = _env_float('VIOLENCE_BEFORE_WINDOW', 5.0)
     after_violence_window: float = _env_float('VIOLENCE_AFTER_WINDOW', 5.0)
@@ -217,6 +220,12 @@ class AdvancedAnalyzerConfig:
     # Persistence: a concerning-emotion segment must span at least this many consecutive
     # windows (1 = flag single 5 s windows; 2 = at least ~7.5 s of angry speech)
     emotion_min_windows: int = _env_int('EMOTION_MIN_WINDOWS', 1)
+    # Learned decision heads (event_heads.py, heads/*.json), trained on the dev split by
+    # `python -m evaluation.heads`. They replace the rules above when every model they need
+    # is loaded. Threshold NaN = the operating point stored in the head file.
+    use_learned_heads: bool = _env_bool('USE_LEARNED_HEADS', True)
+    heads_dir: str = _env_str('HEADS_DIR', '')
+    anger_head_threshold: float = _env_float('EMOTION_ANGER_HEAD_THRESHOLD', float('nan'))
 
     def whisper_model_for(self, language: str) -> str:
         if language == 'he':
@@ -327,7 +336,7 @@ class SoundShieldConfig:
     logging_config: LoggingConfig = field(default_factory=LoggingConfig)
 
     # Application metadata
-    version: str = '3.0.0'
+    version: str = '3.1.0'
     app_name: str = 'SoundShield-AI'
 
 

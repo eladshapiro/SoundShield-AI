@@ -1,0 +1,179 @@
+{
+  "minutes": 20.0,
+  "seed": 0,
+  "kids_share": 0.5,
+  "negative": {
+    "cry": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 7,
+      "true_detections": 0,
+      "false_detections": 7,
+      "false_by_source": {
+        "us8k/children_playing": 5,
+        "esc50/human_nonspeech": 1,
+        "cremad/happy": 1
+      },
+      "false_per_hour": 21.0
+    },
+    "violence_any_vs_scream+anger": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 7,
+      "true_detections": 0,
+      "false_detections": 7,
+      "false_by_source": {
+        "cremad/happy": 2,
+        "us8k/children_playing": 2,
+        "esc50/animals": 1,
+        "librispeech/read_speech": 1,
+        "cremad/neutral": 1
+      },
+      "false_per_hour": 21.0
+    },
+    "shouting_vs_scream": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 3,
+      "true_detections": 0,
+      "false_detections": 3,
+      "false_by_source": {
+        "cremad/happy": 1,
+        "esc50/animals": 1,
+        "us8k/children_playing": 1
+      },
+      "false_per_hour": 9.0
+    },
+    "aggressive_tone_vs_anger": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 4,
+      "true_detections": 0,
+      "false_detections": 4,
+      "false_by_source": {
+        "librispeech/read_speech": 1,
+        "cremad/happy": 1,
+        "us8k/children_playing": 1,
+        "cremad/neutral": 1
+      },
+      "false_per_hour": 12.0
+    },
+    "concerning_emotion_vs_anger": {
+      "events": 0,
+      "detected_events": 0,
+      "recall": null,
+      "detections": 4,
+      "true_detections": 0,
+      "false_detections": 4,
+      "false_by_source": {
+        "librispeech/read_speech": 1,
+        "cremad/happy": 1,
+        "us8k/children_playing": 1,
+        "cremad/neutral": 1
+      },
+      "false_per_hour": 12.0
+    },
+    "unanswered_cries": 0,
+    "cries_with_response": 7,
+    "models_used": [
+      "ast-tagger",
+      "hubert",
+      "wav2vec2-dim",
+      "whisper",
+      "diarizer"
+    ],
+    "pipeline_seconds": 88.72777986526489,
+    "realtime_factor": 13.524512861949512
+  },
+  "events": {
+    "cry": {
+      "events": 4,
+      "detected_events": 4,
+      "recall": 1.0,
+      "detections": 15,
+      "true_detections": 4,
+      "false_detections": 11,
+      "false_by_source": {
+        "us8k/children_playing": 4,
+        "cremad/happy": 2,
+        "event:scream/vivae/anger": 2,
+        "event:scream/vivae/pain": 1,
+        "esc50/human_nonspeech": 1,
+        "event:scream/vivae/fear": 1
+      },
+      "false_per_hour": 33.0
+    },
+    "violence_any_vs_scream+anger": {
+      "events": 19,
+      "detected_events": 16,
+      "recall": 0.8421052631578947,
+      "detections": 22,
+      "true_detections": 16,
+      "false_detections": 6,
+      "false_by_source": {
+        "us8k/children_playing": 3,
+        "cremad/happy": 1,
+        "librispeech/read_speech": 1,
+        "ravdess/calm": 1
+      },
+      "false_per_hour": 18.0
+    },
+    "shouting_vs_scream": {
+      "events": 10,
+      "detected_events": 7,
+      "recall": 0.7,
+      "detections": 10,
+      "true_detections": 7,
+      "false_detections": 3,
+      "false_by_source": {
+        "cremad/happy": 1,
+        "event:anger/cremad/anger": 1,
+        "us8k/children_playing": 1
+      },
+      "false_per_hour": 9.0
+    },
+    "aggressive_tone_vs_anger": {
+      "events": 9,
+      "detected_events": 9,
+      "recall": 1.0,
+      "detections": 12,
+      "true_detections": 9,
+      "false_detections": 3,
+      "false_by_source": {
+        "librispeech/read_speech": 1,
+        "ravdess/calm": 1,
+        "us8k/children_playing": 1
+      },
+      "false_per_hour": 9.0
+    },
+    "concerning_emotion_vs_anger": {
+      "events": 9,
+      "detected_events": 9,
+      "recall": 1.0,
+      "detections": 12,
+      "true_detections": 9,
+      "false_detections": 3,
+      "false_by_source": {
+        "librispeech/read_speech": 1,
+        "ravdess/calm": 1,
+        "us8k/children_playing": 1
+      },
+      "false_per_hour": 9.0
+    },
+    "unanswered_cries": 0,
+    "cries_with_response": 13,
+    "models_used": [
+      "ast-tagger",
+      "hubert",
+      "wav2vec2-dim",
+      "whisper",
+      "diarizer"
+    ],
+    "pipeline_seconds": 79.89075326919556,
+    "realtime_factor": 15.020511772577047
+  }
+}
